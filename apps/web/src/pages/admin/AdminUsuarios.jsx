@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ShieldCheck, HelpCircle, Check, X, Users, UserPlus, Search, Pencil } from 'lucide-react'
+import { ShieldCheck, HelpCircle, Check, X, Users, UserPlus, Search, Pencil, KeyRound } from 'lucide-react'
 import { Avatar } from '../../components/ui/Avatar.jsx'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Tabs.jsx'
 import { QualificacaoSelect, NivelSelect } from '../../components/ui/RoleSelect.jsx'
-import { QualificacaoBadge, NivelBadge, StatusBadge } from '../../components/ui/RoleBadge.jsx'
+import { QualificacaoBadge, StatusBadge } from '../../components/ui/RoleBadge.jsx'
 import { Checkbox } from '../../components/ui/Checkbox.jsx'
 import { Popover } from '../../components/ui/Popover.jsx'
 import { Modal } from '../../components/ui/Modal.jsx'
@@ -14,12 +14,14 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog.jsx'
 import { useToast } from '../../components/ui/Toast.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import {
-  CORES_STATUS, ROTULO_QUALIFICACAO, TODAS_QUALIFICACOES, opcoesDeQualificacao,
-  opcoesDeNivel, ehAdmin, statusDeUsuario,
+  CORES_STATUS, TODAS_QUALIFICACOES, opcoesDeQualificacao, opcoesDeNivel, ehAdmin, statusDeUsuario,
 } from '../../lib/papeis.js'
+import { mascaraTelefone } from '../../lib/mascaras.js'
+import { formatarWhatsapp, whatsappValido } from '../../lib/whatsapp.js'
 import {
   apiUsuariosPendentes, apiAprovarUsuario, apiRecusarUsuario, apiListarUsuarios,
   apiAtualizarQualificacao, apiAtualizarNivel, apiAtualizarUsuario, apiAtualizarUsuarioAtivo,
+  apiRedefinirSenha,
 } from '../../lib/api.js'
 
 const LEGENDA_QUALIF = [
@@ -211,14 +213,7 @@ export function AbaPendentes({ eu }) {
   )
 }
 
-// ── Status (1 ícone que expande no hover e age no clique) ────────────────────
-const HINT_STATUS = {
-  PENDENTE: 'clique para aprovar',
-  ATIVO: 'clique para inativar',
-  INATIVO: 'clique para ativar',
-  REPROVADO: 'clique para reativar',
-}
-
+// ── Status: só o ícone (ativo/inativo/pendente/reprovado); alterna no clique ──
 function StatusControl({ status, onClick, ocupado }) {
   const c = CORES_STATUS[status]
   const Ic = c.icon
@@ -227,14 +222,11 @@ function StatusControl({ status, onClick, ocupado }) {
       type="button"
       onClick={onClick}
       disabled={ocupado}
-      title={`${c.label} — ${HINT_STATUS[status]}`}
-      aria-label={`${c.label}. ${HINT_STATUS[status]}`}
-      className={`group inline-flex shrink-0 items-center rounded-full border p-1.5 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${c.chip}`}
+      title={c.label}
+      aria-label={c.label}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full border p-1.5 transition-transform hover:scale-110 disabled:opacity-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${c.chip}`}
     >
       <Ic className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 group-hover:ml-1.5 group-hover:max-w-[240px] group-hover:opacity-100">
-        {c.label} · {HINT_STATUS[status]}
-      </span>
     </button>
   )
 }
@@ -242,27 +234,52 @@ function StatusControl({ status, onClick, ocupado }) {
 // ── Modal de edição de usuário ───────────────────────────────────────────────
 function EditarUsuarioModal({ u, eu, onFechar, onSalvo }) {
   const toast = useToast()
+  const { aplicarUsuario } = useAuth()
+  const souEu = u.id === eu.id
   const [nome, setNome] = useState(u.nome)
-  const [whatsapp, setWhatsapp] = useState(u.whatsapp || '')
+  const [email, setEmail] = useState(u.email)
+  const [whatsapp, setWhatsapp] = useState(formatarWhatsapp(u.whatsapp || ''))
+  const [novaSenha, setNovaSenha] = useState('')
   const [ativo, setAtivo] = useState(u.ativo)
   const [nivel, setNivel] = useState(u.nivelAcesso)
   const [qualif, setQualif] = useState(u.qualificacao)
   const [salvando, setSalvando] = useState(false)
+  const [erros, setErros] = useState({})
 
   const opcoesNivel = opcoesDeNivel(eu.nivelAcesso, u.nivelAcesso)
   const opcoesQualif = opcoesDeQualificacao(eu.nivelAcesso, eu.qualificacao)
+  const nivelBloqueado = opcoesNivel.length <= 1 || souEu
+
+  function validar() {
+    const e = {}
+    if (!nome.trim()) e.nome = 'Informe o nome'
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) e.email = 'E-mail inválido'
+    if (!whatsappValido(whatsapp)) e.whatsapp = 'Número inválido — use DDD + número (10 ou 11 dígitos).'
+    if (novaSenha && novaSenha.length < 6) e.senha = 'A senha deve ter ao menos 6 caracteres.'
+    setErros(e)
+    return Object.keys(e).length === 0
+  }
 
   async function salvar() {
+    if (!validar()) return
     setSalvando(true)
     try {
       let atual = u
-      if (nome !== u.nome || whatsapp !== (u.whatsapp || '') || ativo !== u.ativo) {
-        atual = await apiAtualizarUsuario(u.id, { nome, whatsapp: whatsapp || null, ativo })
-      }
+      const dados = {}
+      if (nome !== u.nome) dados.nome = nome.trim()
+      if (email.trim() !== u.email) dados.email = email.trim()
+      const wppRaw = whatsapp.replace(/\D/g, '') || null
+      if (wppRaw !== (u.whatsapp ? String(u.whatsapp).replace(/\D/g, '') : null)) dados.whatsapp = wppRaw
+      if (!souEu && ativo !== u.ativo) dados.ativo = ativo
+      if (Object.keys(dados).length) atual = await apiAtualizarUsuario(u.id, dados)
       if (nivel !== u.nivelAcesso) atual = await apiAtualizarNivel(u.id, nivel)
       if (qualif !== u.qualificacao) atual = await apiAtualizarQualificacao(u.id, qualif)
-      onSalvo({ ...u, ...atual, nome, whatsapp, ativo, nivelAcesso: nivel, qualificacao: qualif })
-      toast.sucesso('Usuário atualizado.')
+      if (novaSenha) await apiRedefinirSenha(u.id, novaSenha)
+
+      const atualizado = { ...u, ...atual, nome: nome.trim(), email: email.trim(), whatsapp: wppRaw, ativo, nivelAcesso: nivel, qualificacao: qualif }
+      onSalvo(atualizado)
+      if (souEu) aplicarUsuario({ ...eu, ...atualizado })
+      toast.sucesso(novaSenha ? 'Usuário atualizado e senha redefinida.' : 'Usuário atualizado.')
       onFechar()
     } catch (e) {
       toast.erro(e?.response?.data?.erro || 'Não foi possível salvar.')
@@ -271,20 +288,53 @@ function EditarUsuarioModal({ u, eu, onFechar, onSalvo }) {
 
   return (
     <Modal open onClose={onFechar} titulo={`Editar ${u.nome}`} size="md">
-      <div className="space-y-4 p-5">
-        <Input id="edit-nome" label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} />
-        <Input id="edit-wpp" label="WhatsApp" value={whatsapp} placeholder="(62) 99999-9999" onChange={(e) => setWhatsapp(e.target.value)} />
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+      <div className="space-y-5 p-5">
+        {/* Identidade */}
+        <div className="space-y-4">
+          <Input id="edit-nome" label="Nome" value={nome} error={erros.nome} onChange={(e) => setNome(e.target.value)} />
+          <Input id="edit-email" label="E-mail" type="email" value={email} error={erros.email} autoComplete="off" onChange={(e) => setEmail(e.target.value)} />
+          <Input
+            id="edit-wpp" label="WhatsApp" type="tel" inputMode="tel" placeholder="(62) 99999-9999"
+            value={whatsapp} error={erros.whatsapp}
+            onChange={(e) => setWhatsapp(mascaraTelefone(e.target.value))}
+          />
+        </div>
+
+        {/* Acesso */}
+        <div className="grid gap-4 border-t border-border pt-5 sm:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-text">Qualificação</label>
-            <QualificacaoSelect value={qualif} opcoes={opcoesQualif.length ? opcoesQualif : [qualif]} onChange={setQualif} readOnly={opcoesQualif.length <= 1} />
+            <QualificacaoSelect
+              value={qualif} bloco
+              opcoes={opcoesQualif.length ? opcoesQualif : [qualif]}
+              onChange={setQualif} readOnly={opcoesQualif.length <= 1}
+            />
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-text">Nível de acesso</label>
-            <NivelSelect value={nivel} opcoes={opcoesNivel} onChange={setNivel} readOnly={opcoesNivel.length <= 1 || u.id === eu.id} />
+            <NivelSelect value={nivel} bloco opcoes={opcoesNivel} onChange={setNivel} readOnly={nivelBloqueado} />
+            {souEu && <p className="mt-1.5 text-xs text-text-muted">Você não pode alterar o próprio nível.</p>}
           </div>
         </div>
-        <Checkbox id="edit-ativo" label="Conta ativa" checked={ativo} onChange={setAtivo} />
+
+        {/* Senha */}
+        <div className="border-t border-border pt-5">
+          <Input
+            id="edit-senha" label="Nova senha" type="password" autoComplete="new-password"
+            placeholder="Deixe em branco para manter" value={novaSenha} error={erros.senha}
+            onChange={(e) => setNovaSenha(e.target.value)}
+          />
+          <p className="mt-1.5 flex items-center gap-1.5 text-xs text-text-muted">
+            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" /> Preencha para redefinir a senha desta pessoa.
+          </p>
+        </div>
+
+        {/* Status */}
+        {!souEu && (
+          <div className="border-t border-border pt-5">
+            <Checkbox id="edit-ativo" label="Conta ativa" descricao="Desmarque para inativar o acesso desta pessoa." checked={ativo} onChange={setAtivo} />
+          </div>
+        )}
       </div>
       <div className="flex justify-end gap-2 border-t border-border px-5 py-3.5">
         <button type="button" onClick={onFechar} className="rounded-lg px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface hover:text-text cursor-pointer">Cancelar</button>
@@ -314,15 +364,6 @@ function AbaTodos({ eu }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca])
 
-  async function trocarQualificacao(u, qualificacao) {
-    setOcupado(u.id)
-    try {
-      const r = await apiAtualizarQualificacao(u.id, qualificacao)
-      setLista((l) => l.map((x) => (x.id === u.id ? { ...x, qualificacao: r.qualificacao } : x)))
-      toast.sucesso(`Qualificação alterada para ${ROTULO_QUALIFICACAO[qualificacao]}.`)
-    } catch (e) { toast.erro(e?.response?.data?.erro || 'Não foi possível alterar.') }
-    finally { setOcupado(null) }
-  }
   async function acaoStatus(u) {
     const st = statusDeUsuario(u)
     setOcupado(u.id)
@@ -344,8 +385,6 @@ function AbaTodos({ eu }) {
     } catch (e) { toast.erro(e?.response?.data?.erro || 'Não foi possível alterar o status.') }
     finally { setOcupado(null) }
   }
-
-  const opcoesQualif = opcoesDeQualificacao(eu?.nivelAcesso, eu?.qualificacao)
 
   return (
     <div className="space-y-4">
@@ -370,7 +409,6 @@ function AbaTodos({ eu }) {
           {lista.map((u) => {
             const souEu = u.id === eu?.id
             const admin = ehAdmin(eu?.nivelAcesso)
-            const podeEditar = admin || (!!eu?.celulaId && u.celulaId === eu?.celulaId)
             const st = statusDeUsuario(u)
             const podeStatus = admin && !souEu
             return (
@@ -385,30 +423,19 @@ function AbaTodos({ eu }) {
                   </p>
                   <p className="truncate text-sm text-text-muted">{u.email}</p>
                 </div>
-                {/* ícone de nível (admin/super) com hover, antes da qualificação */}
-                {ehAdmin(u.nivelAcesso) && <NivelBadge nivel={u.nivelAcesso} soIcone />}
-                {/* Reprovado não tem qualificação exibida */}
-                {st !== 'REPROVADO' && (
-                  <div className="shrink-0">
-                    <QualificacaoSelect
-                      value={u.qualificacao}
-                      opcoes={podeEditar && opcoesQualif.length ? opcoesQualif : [u.qualificacao]}
-                      readOnly={souEu || !podeEditar || opcoesQualif.length <= 1 || ocupado === u.id}
-                      onChange={(q) => trocarQualificacao(u, q)}
-                    />
-                  </div>
-                )}
+                {/* Qualificação em leitura (mudar é pelo lápis). Reprovado não exibe. */}
+                {st !== 'REPROVADO' && <QualificacaoBadge qualificacao={u.qualificacao} className="hidden sm:inline-flex" />}
                 {podeStatus ? (
                   <StatusControl status={st} ocupado={ocupado === u.id} onClick={() => acaoStatus(u)} />
                 ) : (
                   <StatusBadge status={st} />
                 )}
-                {admin && !souEu && (
+                {admin && (
                   <button
                     type="button"
                     onClick={() => setEditando(u)}
                     aria-label={`Editar ${u.nome}`}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted transition-colors hover:text-text cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted transition-transform hover:scale-110 hover:text-text cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>

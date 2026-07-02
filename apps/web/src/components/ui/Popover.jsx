@@ -1,17 +1,39 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 /**
- * Popover ancorado simples: outside-click + Esc fecham. Posiciona abaixo do trigger
- * (align 'start'|'end'). Para colisão de borda em telas estreitas, o consumidor pode
- * usar Sheet no mobile (ex.: RoleSelect).
+ * Popover ancorado. O painel é renderizado em portal (document.body) com
+ * posição `fixed` calculada a partir do trigger — assim NUNCA é cortado por
+ * containers com overflow (ex.: dentro de um Modal). Fecha em outside-click/Esc.
+ * `align` 'start'|'end'; `matchWidth` faz o painel ter a largura do trigger.
  */
-export function Popover({ trigger, children, open, onOpenChange, align = 'start', className = '' }) {
-  const ref = useRef(null)
+export function Popover({ trigger, children, open, onOpenChange, align = 'start', matchWidth = false, className = '' }) {
+  const triggerRef = useRef(null)
+  const panelRef = useRef(null)
+  const [pos, setPos] = useState(null)
+
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return
+    const el = triggerRef.current
+    function place() {
+      const r = el.getBoundingClientRect()
+      setPos({ top: r.bottom + 8, left: r.left, right: window.innerWidth - r.right, width: r.width })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
     function onDoc(e) {
-      if (ref.current && !ref.current.contains(e.target)) onOpenChange?.(false)
+      if (triggerRef.current?.contains(e.target)) return
+      if (panelRef.current?.contains(e.target)) return
+      onOpenChange?.(false)
     }
     function onKey(e) {
       if (e.key === 'Escape') onOpenChange?.(false)
@@ -25,17 +47,23 @@ export function Popover({ trigger, children, open, onOpenChange, align = 'start'
   }, [open, onOpenChange])
 
   return (
-    <div ref={ref} className="relative inline-flex">
+    <div ref={triggerRef} className="relative inline-flex">
       {trigger}
-      {open && (
+      {open && pos && createPortal(
         <div
+          ref={panelRef}
           role="dialog"
-          className={`absolute top-full z-50 mt-2 min-w-[12rem] rounded-xl border border-border bg-card p-1.5 shadow-lg ${
-            align === 'end' ? 'right-0' : 'left-0'
-          } ${className}`}
+          style={{
+            position: 'fixed',
+            top: pos.top,
+            ...(align === 'end' ? { right: pos.right } : { left: pos.left }),
+            ...(matchWidth ? { width: pos.width } : {}),
+          }}
+          className={`z-[200] min-w-[12rem] rounded-xl border border-border bg-card p-1.5 shadow-lg ${className}`}
         >
           {children}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

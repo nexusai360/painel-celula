@@ -9,11 +9,34 @@ import { CORES_PAPEL, CORES_NIVEL, CORES_QUALIFICACAO } from '../../lib/papeis.j
  * `opcoes` já vem filtrada pelo chamador. readOnly/≤1 opção → chip estático.
  * `cores` é o dicionário (CORES_NIVEL/CORES_QUALIFICACAO/CORES_PAPEL).
  */
-export function ChipSelect({ value, opcoes = [], onChange, readOnly = false, cores, ariaLabel = 'Alterar', className = '' }) {
+export function ChipSelect({ value, opcoes = [], onChange, readOnly = false, cores, ariaLabel = 'Alterar', bloco = false, className = '' }) {
   const [open, setOpen] = useState(false)
-  if (readOnly || opcoes.length <= 1) return <Chip conf={cores[value]} className={className} />
 
-  const trigger = (
+  // Somente-leitura: no modo bloco mostra um campo estático; senão, o chip.
+  if (readOnly || opcoes.length <= 1) {
+    if (bloco) {
+      return (
+        <div className={`flex h-12 w-full items-center rounded-xl border border-border bg-surface px-3 ${className}`}>
+          <Chip conf={cores[value]} />
+        </div>
+      )
+    }
+    return <Chip conf={cores[value]} className={className} />
+  }
+
+  const trigger = bloco ? (
+    <button
+      type="button"
+      aria-haspopup="listbox"
+      aria-expanded={open}
+      aria-label={ariaLabel}
+      onClick={() => setOpen((o) => !o)}
+      className="flex h-12 w-full items-center justify-between rounded-xl border border-border bg-background px-3 transition-colors hover:border-brand-soft cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+    >
+      <Chip conf={cores[value]} />
+      <ChevronDown className={`h-4 w-4 text-text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+    </button>
+  ) : (
     <button
       type="button"
       aria-haspopup="listbox"
@@ -28,8 +51,15 @@ export function ChipSelect({ value, opcoes = [], onChange, readOnly = false, cor
   )
 
   return (
-    <Popover open={open} onOpenChange={setOpen} trigger={trigger} align="end" className={className}>
-      <ul role="listbox" className="min-w-[13rem]">
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      trigger={trigger}
+      align={bloco ? 'start' : 'end'}
+      matchWidth={bloco}
+      className={bloco ? '' : className}
+    >
+      <ul role="listbox" className={bloco ? '' : 'min-w-[13rem]'}>
         {opcoes.map((p) => {
           const c = cores[p]
           if (!c) return null
@@ -62,10 +92,10 @@ export function RoleSelect({ value, opcoes = [], onChange, readOnly = false, cla
   return <ChipSelect value={value} opcoes={opcoes} onChange={onChange} readOnly={readOnly} cores={CORES_PAPEL} ariaLabel="Alterar nível de acesso" className={className} />
 }
 
-export function NivelSelect({ value, opcoes = [], onChange, readOnly = false, className = '' }) {
-  return <ChipSelect value={value} opcoes={opcoes} onChange={onChange} readOnly={readOnly} cores={CORES_NIVEL} ariaLabel="Alterar nível de acesso" className={className} />
+export function NivelSelect({ value, opcoes = [], onChange, readOnly = false, bloco = false, className = '' }) {
+  return <ChipSelect value={value} opcoes={opcoes} onChange={onChange} readOnly={readOnly} bloco={bloco} cores={CORES_NIVEL} ariaLabel="Alterar nível de acesso" className={className} />
 }
 
-export function QualificacaoSelect({ value, opcoes = [], onChange, readOnly = false, className = '' }) {
-  return <ChipSelect value={value} opcoes={opcoes} onChange={onChange} readOnly={readOnly} cores={CORES_QUALIFICACAO} ariaLabel="Alterar qualificação" className={className} />
+export function QualificacaoSelect({ value, opcoes = [], onChange, readOnly = false, bloco = false, className = '' }) {
+  return <ChipSelect value={value} opcoes={opcoes} onChange={onChange} readOnly={readOnly} bloco={bloco} cores={CORES_QUALIFICACAO} ariaLabel="Alterar qualificação" className={className} />
 }
