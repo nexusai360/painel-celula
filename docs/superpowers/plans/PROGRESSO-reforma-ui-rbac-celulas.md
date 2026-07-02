@@ -16,8 +16,13 @@
 - [x] **Fase 4** — Células (cep+migration, coerção, refine TZ-safe verificado, form com CEP/cidade/sem-número/placeholders, fix criação)
 - [x] **Fase 5** — Perfil estado civil por checkbox (map-back seguro). FALTA 5.2 (/cadastro signup) — pendência menor
 - [x] **Fase 6** — Onboarding: CelulaPicker sofisticado (bonito sem foto/líder) + Aguardando com refresh de status
-- [ ] **Fase 7** — QR (ramo com conta) ← PRÓXIMA
-- [ ] **Fase 8** — Polimento, migração de crus (CronogramaForm etc.), design system MASTER, E2E + screenshots
+- [x] **Fase 7** — QR ramo "com conta" mostra resultado do check-in via toast
+- [~] **Fase 8** — PARCIAL: design-system MASTER destilado ✅; E2E backend real ✅ (login super, cria célula 201, incoerente 400, migration cep aplicada, super-admin no entrypoint). **FALTA:** migrar `<select>/<input>` crus (CronogramaForm, Calendario, Pedidos, Testemunhos) para primitivos; reformar /cadastro (signup) [Task 5.2]; screenshots visuais.
+
+## App LIVE
+Plataforma reformada rodando em **http://localhost:3200** (container rebuild com o código novo).
+Deploy real validado: migrate deploy + garantir-super-admin no entrypoint OK.
+Login para revisar como dono: nexusai360@gmail.com / nexus.AI@360 (SUPER_ADMIN).
 
 ## Log (task → commit)
 - 0.-1 infra teste React (jsdom+testing-library, coleta src/) → 63f1696
