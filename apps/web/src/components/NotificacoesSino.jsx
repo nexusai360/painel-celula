@@ -1,20 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bell, Send } from 'lucide-react'
+import { Bell } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { ehAdmin } from '../lib/papeis.js'
-import { apiNotificacoes, apiLerNotificacoes, apiEnviarNotificacao } from '../lib/api.js'
+import { apiNotificacoes, apiLerNotificacoes } from '../lib/api.js'
 
 function quando(iso) {
   try { return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
 }
 
+// Sino: SÓ leitura de notificações. O envio vive na área de Administração › Avisos.
 export function NotificacoesSino() {
   const { usuario } = useAuth()
   const [aberto, setAberto] = useState(false)
-  const [dados, setDados] = useState({ notificacoes: [], naoLidas: 0, podeEnviar: false })
-  const [compondo, setCompondo] = useState(false)
-  const [form, setForm] = useState({ titulo: '', corpo: '', escopo: '' })
-  const [enviando, setEnviando] = useState(false)
+  const [dados, setDados] = useState({ notificacoes: [], naoLidas: 0 })
   const ref = useRef(null)
 
   async function carregar() {
@@ -42,21 +39,6 @@ export function NotificacoesSino() {
     }
   }
 
-  const opcoesEscopo = []
-  if (ehAdmin(usuario?.papel)) opcoesEscopo.push({ v: 'GLOBAL', label: 'Todos (aviso global)' })
-  if (usuario?.celulaId) opcoesEscopo.push({ v: 'CELULA', label: 'Minha célula' })
-
-  async function enviar(e) {
-    e.preventDefault()
-    setEnviando(true)
-    try {
-      await apiEnviarNotificacao({ titulo: form.titulo, corpo: form.corpo, escopo: form.escopo || opcoesEscopo[0]?.v })
-      setForm({ titulo: '', corpo: '', escopo: '' })
-      setCompondo(false)
-      carregar()
-    } catch { /* ignore */ } finally { setEnviando(false) }
-  }
-
   if (usuario?.aprovado === false) return null
 
   return (
@@ -73,33 +55,9 @@ export function NotificacoesSino() {
 
       {aberto && (
         <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] origin-top-right rounded-2xl border border-border bg-card p-2 shadow-lg z-30">
-          <div className="flex items-center justify-between px-2 py-1.5">
+          <div className="px-2 py-1.5">
             <span className="text-sm font-semibold text-text">Notificações</span>
-            {dados.podeEnviar && opcoesEscopo.length > 0 && (
-              <button onClick={() => setCompondo((v) => !v)} className="text-xs font-medium text-brand hover:underline cursor-pointer">
-                {compondo ? 'Cancelar' : 'Enviar aviso'}
-              </button>
-            )}
           </div>
-
-          {compondo && (
-            <form onSubmit={enviar} className="mb-2 space-y-2 rounded-xl border border-border p-2">
-              {opcoesEscopo.length > 1 && (
-                <select value={form.escopo || opcoesEscopo[0].v} onChange={(e) => setForm((f) => ({ ...f, escopo: e.target.value }))}
-                  className="h-9 w-full rounded-lg border border-border bg-background px-2 text-sm text-text">
-                  {opcoesEscopo.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
-                </select>
-              )}
-              <input value={form.titulo} onChange={(e) => setForm((f) => ({ ...f, titulo: e.target.value }))} placeholder="Título" required
-                className="h-9 w-full rounded-lg border border-border bg-background px-2 text-sm text-text placeholder:text-text-muted" />
-              <textarea value={form.corpo} onChange={(e) => setForm((f) => ({ ...f, corpo: e.target.value }))} placeholder="Mensagem" rows={2} required
-                className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-text placeholder:text-text-muted" />
-              <button type="submit" disabled={enviando} className="brand-grad inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-brand text-sm font-semibold text-on-brand disabled:opacity-50 cursor-pointer">
-                <Send className="h-4 w-4" /> {enviando ? 'Enviando…' : 'Enviar'}
-              </button>
-            </form>
-          )}
-
           <div className="max-h-80 overflow-auto">
             {dados.notificacoes.length === 0 ? (
               <p className="px-2 py-6 text-center text-sm text-text-muted">Nenhuma notificação.</p>
