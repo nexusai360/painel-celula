@@ -7,11 +7,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Eixo legado (dropado na Task 9 da Fase A). Substituído por NivelAcesso + Qualificacao.
 enum Papel {
   MEMBRO
   LIDER
   ADMIN
   SUPER_ADMIN
+}
+
+// Nível de acesso (plataforma): permissão.
+enum NivelAcesso {
+  USUARIO
+  ADMIN
+  SUPER_ADMIN
+}
+
+// Qualificação (função na igreja): ortogonal ao nível.
+enum Qualificacao {
+  CONVIDADO
+  MEMBRO
+  LOUVOR
+  COLIDER
+  LIDER
+  PASTOR
 }
 
 enum EstadoCivil {
@@ -44,6 +62,8 @@ model User {
   email        String    @unique
   senhaHash    String?
   papel        Papel     @default(MEMBRO)
+  nivelAcesso  NivelAcesso  @default(USUARIO)
+  qualificacao Qualificacao @default(CONVIDADO)
   celula       Celula?   @relation("MembrosDaCelula", fields: [celulaId], references: [id])
   celulaId     String?
   ativo        Boolean   @default(true)
