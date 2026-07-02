@@ -100,6 +100,16 @@ export async function usuarioRoutes(app) {
     const alvo = await prisma.user.findUnique({ where: { id } })
     if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
 
+    // Mexer em conta ADMIN/SUPER_ADMIN é exclusivo do SUPER_ADMIN (self-exempt: admin edita a si mesmo).
+    const editorPapel = request.usuario.papel
+    if (
+      id !== request.usuario.id &&
+      editorPapel !== 'SUPER_ADMIN' &&
+      (alvo.papel === 'SUPER_ADMIN' || alvo.papel === 'ADMIN')
+    ) {
+      return reply.code(403).send({ erro: 'Sem permissão' })
+    }
+
     const data = {}
     if (parsed.data.nome !== undefined) data.nome = parsed.data.nome
     if (parsed.data.email !== undefined && parsed.data.email !== alvo.email) {

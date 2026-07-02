@@ -59,8 +59,8 @@ describe('GET /usuarios', () => {
 describe('PUT /usuarios/:id', () => {
   const suf = `put-${Date.now()}`
   const qrCel = `qrput-${suf}`
-  const emailsCriados = [`alvo-${suf}@t.com`, `liderput-${suf}@t.com`, `ocupado-${suf}@t.com`]
-  let alvoId, adminId, liderId, emailOcupado
+  const emailsCriados = [`alvo-${suf}@t.com`, `liderput-${suf}@t.com`, `ocupado-${suf}@t.com`, `admin2-${suf}@t.com`, `super-${suf}@t.com`]
+  let alvoId, adminId, liderId, emailOcupado, outroAdminId, superId, superToken
 
   beforeAll(async () => {
     const admin = await prisma.user.findUnique({ where: { email: emailAdmin } })
@@ -73,6 +73,11 @@ describe('PUT /usuarios/:id', () => {
     await prisma.celula.update({ where: { id: cel.id }, data: { liderId: lider.id } })
     const ocupado = await prisma.user.create({ data: { nome: 'Ocupado', email: `ocupado-${suf}@t.com`, senhaHash: await hashSenha('x'), papel: 'MEMBRO' } })
     emailOcupado = ocupado.email
+    const outroAdmin = await prisma.user.create({ data: { nome: 'Outro Admin', email: `admin2-${suf}@t.com`, senhaHash: await hashSenha('x'), papel: 'ADMIN' } })
+    outroAdminId = outroAdmin.id
+    const superU = await prisma.user.create({ data: { nome: 'Super', email: `super-${suf}@t.com`, senhaHash: await hashSenha('x'), papel: 'SUPER_ADMIN' } })
+    superId = superU.id
+    superToken = app.jwt.sign({ id: superU.id, papel: 'SUPER_ADMIN', celulaId: null })
   })
 
   afterAll(async () => {
@@ -112,5 +117,18 @@ describe('PUT /usuarios/:id', () => {
   it('alvo inexistente → 404', async () => {
     const res = await app.inject({ method: 'PUT', url: '/usuarios/nao-existe', headers: { authorization: `Bearer ${adminToken}` }, payload: { nome: 'X' } })
     expect(res.statusCode).toBe(404)
+  })
+  it('admin não pode editar OUTRO admin → 403', async () => {
+    const res = await app.inject({ method: 'PUT', url: `/usuarios/${outroAdminId}`, headers: { authorization: `Bearer ${adminToken}` }, payload: { nome: 'X' } })
+    expect(res.statusCode).toBe(403)
+  })
+  it('admin não pode editar super admin → 403', async () => {
+    const res = await app.inject({ method: 'PUT', url: `/usuarios/${superId}`, headers: { authorization: `Bearer ${adminToken}` }, payload: { nome: 'X' } })
+    expect(res.statusCode).toBe(403)
+  })
+  it('super admin pode editar admin → 200', async () => {
+    const res = await app.inject({ method: 'PUT', url: `/usuarios/${outroAdminId}`, headers: { authorization: `Bearer ${superToken}` }, payload: { nome: 'Admin Renomeado' } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().usuario.nome).toBe('Admin Renomeado')
   })
 })
