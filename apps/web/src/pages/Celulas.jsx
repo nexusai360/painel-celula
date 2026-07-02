@@ -7,6 +7,8 @@ import { Input } from '../components/ui/Input.jsx'
 import { Select } from '../components/ui/Select.jsx'
 import { Combobox } from '../components/ui/Combobox.jsx'
 import { Checkbox } from '../components/ui/Checkbox.jsx'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs.jsx'
+import { EmptyState } from '../components/ui/Estados.jsx'
 import { DateTimePicker } from '../components/ui/DateTimePicker.jsx'
 import { Tag } from '../components/ui/Tag.jsx'
 import { Spinner } from '../components/ui/Spinner.jsx'
@@ -83,7 +85,6 @@ function NovaCelula({ onCriada }) {
         nome: '', descricao: '', diaSemana: 4, frequenciaDias: 7, dataPrimeiroEncontro: '',
         cidade: '', bairro: '', endereco: '', numero: '', complemento: '', pontoReferencia: ''
       })
-      setAberto(false)
       onCriada()
       toast.sucesso('Célula criada.')
     } catch (e2) {
@@ -91,14 +92,6 @@ function NovaCelula({ onCriada }) {
     } finally {
       setSalvando(false)
     }
-  }
-
-  if (!aberto) {
-    return (
-      <Button className="w-auto px-5" onClick={() => setAberto(true)}>
-        <Plus className="h-4 w-4" /> Nova célula
-      </Button>
-    )
   }
 
   return (
@@ -158,10 +151,7 @@ function NovaCelula({ onCriada }) {
         </div>
 
         {erro && <p role="alert" className="text-sm text-danger">{erro}</p>}
-        <div className="flex gap-2">
-          <Button type="submit" loading={salvando} className="w-auto px-5">Criar</Button>
-          <Button type="button" variant="ghost" className="w-auto px-5" onClick={() => setAberto(false)}>Cancelar</Button>
-        </div>
+        <Button type="submit" loading={salvando} className="w-auto px-6">Criar célula</Button>
       </form>
     </Card>
   )
@@ -240,6 +230,7 @@ function DefinirLider({ celula, onDefinido }) {
 export default function Celulas() {
   const [celulas, setCelulas] = useState(null)
   const [erro, setErro] = useState('')
+  const [aba, setAba] = useState('nova')
 
   async function carregar() {
     try {
@@ -277,11 +268,18 @@ export default function Celulas() {
         </div>
       </div>
 
-      <div className="mb-5">
-        <NovaCelula onCriada={carregar} />
-      </div>
+      <Tabs value={aba} onValueChange={setAba} className="space-y-5">
+        <TabsList aria-label="Células">
+          <TabsTrigger value="nova">Nova célula</TabsTrigger>
+          <TabsTrigger value="todas">Todas as células{celulas?.length ? ` (${celulas.length})` : ''}</TabsTrigger>
+        </TabsList>
 
-      {erro && <p className="text-sm text-danger">{erro}</p>}
+        <TabsContent value="nova">
+          <NovaCelula onCriada={() => { carregar(); setAba('todas') }} />
+        </TabsContent>
+
+        <TabsContent value="todas">
+      {erro && <p className="mb-3 text-sm text-danger">{erro}</p>}
       {!celulas ? (
         <Spinner className="py-16" />
       ) : celulas.length === 0 ? (
@@ -324,6 +322,8 @@ export default function Celulas() {
           ))}
         </div>
       )}
+        </TabsContent>
+      </Tabs>
 
       <ConfirmDialog
         open={!!aExcluir}

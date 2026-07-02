@@ -44,6 +44,11 @@ export function Combobox({
     return () => document.removeEventListener('mousedown', onDoc)
   }, [aberto])
 
+  function abrir() {
+    // Semeia a busca com o valor atual para poder EDITAR/APAGAR (corrige o bug de travar).
+    setQuery(selecionado?.label ?? (allowCustom ? value ?? '' : ''))
+    setAberto(true)
+  }
   function fechar() {
     setAberto(false)
     setQuery('')
@@ -89,7 +94,7 @@ export function Combobox({
             setAtivo(0)
             if (allowCustom) onChange?.(e.target.value)
           }}
-          onFocus={() => setAberto(true)}
+          onFocus={abrir}
           onKeyDown={onKeyDown}
           className="h-11 w-full rounded-xl border border-border bg-card pl-9 pr-9 text-sm text-text placeholder:text-text-muted transition-colors focus:border-brand-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         />
