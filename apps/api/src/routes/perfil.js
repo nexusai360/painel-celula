@@ -35,6 +35,13 @@ export async function perfilRoutes(app) {
       }
     }
 
+    if (parsed.data.dataNascimento !== undefined) {
+      data.dataNascimento = parsed.data.dataNascimento ? new Date(parsed.data.dataNascimento + 'T12:00:00') : null
+    }
+    if (parsed.data.estadoCivil !== undefined) {
+      data.estadoCivil = parsed.data.estadoCivil || null
+    }
+
     const user = await prisma.user.update({ where:{ id: request.usuario.id }, data, ...COM_CELULA })
     return reply.send({ usuario: comCelula(user) })
   })

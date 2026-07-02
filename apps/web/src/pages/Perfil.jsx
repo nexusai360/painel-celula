@@ -9,13 +9,23 @@ import { ROTULO_PAPEL } from '../lib/papeis.js'
 import { AvatarUpload } from '../components/AvatarUpload.jsx'
 import { Input } from '../components/ui/Input.jsx'
 import { Button } from '../components/ui/Button.jsx'
+import { Select } from '../components/ui/Select.jsx'
 import { Card } from '../components/ui/Card.jsx'
+
+const OPCOES_ESTADO_CIVIL = [
+  { value: 'SOLTEIRO', label: 'Solteiro(a)' },
+  { value: 'CASADO', label: 'Casado(a)' },
+  { value: 'UNIAO_ESTAVEL', label: 'União estável' },
+  { value: 'DIVORCIADO', label: 'Divorciado(a)' },
+  { value: 'VIUVO', label: 'Viúvo(a)' }
+]
 
 export default function Perfil() {
   const { usuario, aplicarUsuario, sair } = useAuth()
 
   // Avatar is managed outside react-hook-form (it's a data URL, not a text field)
   const [avatarUrl, setAvatarUrl] = useState(usuario?.avatar ?? null)
+  const [estadoCivil, setEstadoCivil] = useState(usuario?.estadoCivil ?? '')
   const [sucesso, setSucesso] = useState(false)
   const [erroGeral, setErroGeral] = useState(null)
 
@@ -29,6 +39,7 @@ export default function Perfil() {
       nome: usuario?.nome ?? '',
       // Pre-fill with the formatted display value; we strip to digits on submit
       whatsapp: formatarWhatsapp(usuario?.whatsapp ?? ''),
+      dataNascimento: usuario?.dataNascimento ? String(usuario.dataNascimento).slice(0, 10) : '',
     },
   })
 
@@ -44,6 +55,8 @@ export default function Perfil() {
         nome: valores.nome,
         whatsapp: whatsappRaw,
         avatar: avatarUrl,
+        dataNascimento: valores.dataNascimento || null,
+        estadoCivil: estadoCivil || null,
       })
       aplicarUsuario(usuarioAtualizado)
       setSucesso(true)
@@ -105,6 +118,29 @@ export default function Perfil() {
                 inputMode="tel"
                 error={errors.whatsapp?.message}
                 {...register('whatsapp')}
+              />
+
+              {/* Data de nascimento */}
+              <div className="w-full">
+                <Input
+                  id="dataNascimento"
+                  label="Data de nascimento"
+                  type="date"
+                  error={errors.dataNascimento?.message}
+                  {...register('dataNascimento')}
+                />
+                <p className="mt-1.5 text-xs text-text-muted">
+                  Assim a gente lembra de orar e comemorar com você no seu aniversário.
+                </p>
+              </div>
+
+              {/* Estado civil */}
+              <Select
+                label="Estado civil"
+                options={OPCOES_ESTADO_CIVIL}
+                value={estadoCivil}
+                onChange={setEstadoCivil}
+                placeholder="Selecione"
               />
 
               {/* Email — read-only */}
