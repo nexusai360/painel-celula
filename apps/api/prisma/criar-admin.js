@@ -19,8 +19,8 @@ if (!email || !senha) {
 const senhaHash = await hashSenha(senha)
 const admin = await prisma.user.upsert({
   where: { email },
-  update: { papel: 'SUPER_ADMIN', nivelAcesso: 'SUPER_ADMIN', ativo: true, aprovado: true, senhaHash },
-  create: { nome, email, senhaHash, papel: 'SUPER_ADMIN', nivelAcesso: 'SUPER_ADMIN', qualificacao: 'MEMBRO', aprovado: true }
+  update: { nivelAcesso: 'SUPER_ADMIN', ativo: true, aprovado: true, senhaHash },
+  create: { nome, email, senhaHash, nivelAcesso: 'SUPER_ADMIN', qualificacao: 'MEMBRO', aprovado: true }
 })
 console.log(`Super admin pronto: ${admin.email} (nível ${admin.nivelAcesso})`)
 await prisma.$disconnect()

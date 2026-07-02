@@ -16,8 +16,8 @@ async function upsertUsuario(nome, email, papel, celulaId = null) {
   const e = eixos(papel)
   return prisma.user.upsert({
     where: { email },
-    update: { papel, ...e, celulaId },
-    create: { nome, email, senhaHash: await hashSenha(SENHA), papel, ...e, celulaId }
+    update: { ...e, celulaId },
+    create: { nome, email, senhaHash: await hashSenha(SENHA), ...e, celulaId }
   })
 }
 
@@ -43,7 +43,6 @@ async function main() {
       nome: 'Administrador',
       email: 'admin@icelula.app',
       senhaHash: await hashSenha('admin123'),
-      papel: 'ADMIN',
       nivelAcesso: 'ADMIN',
       qualificacao: 'MEMBRO'
     }

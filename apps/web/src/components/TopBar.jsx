@@ -6,14 +6,14 @@ import { AvatarMenu } from './AvatarMenu.jsx'
 import { NotificacoesSino } from './NotificacoesSino.jsx'
 import { NavDrawer } from './NavDrawer.jsx'
 import { ContextSwitcher } from './ui/ContextSwitcher.jsx'
-import { ehAdmin } from '../lib/papeis.js'
+import { ehAdmin, ehGestorQualificacao } from '../lib/papeis.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 // Links da área de PARTICIPANTE (membro/líder). A área de Administração tem sua
 // própria sub-nav (rail) no AdminLayout, então em contexto admin o TopBar mostra
 // só o ContextSwitcher.
 export function linksPorPapel(usuario) {
-  const { papel, celulaId } = usuario || {}
+  const { qualificacao, celulaId } = usuario || {}
   if (usuario?.aprovado === false) return []
   if (usuario?.ativo === false) return [] // conta inativa não navega
   if (!celulaId) return []
@@ -22,7 +22,7 @@ export function linksPorPapel(usuario) {
     { to: '/app/calendario', label: 'Calendário', icon: CalendarDays },
     { to: '/app/pedidos', label: 'Pedidos', icon: HandHeart },
   ]
-  if (papel === 'LIDER') {
+  if (ehGestorQualificacao(qualificacao)) {
     links.push({ to: `/app/celula/${celulaId}`, label: 'Minha Célula', icon: Users2 })
     links.push({ to: '/app/aprovacoes', label: 'Aprovações', icon: UserCheck })
     links.push({ to: '/app/testemunhos', label: 'Testemunhos', icon: Sparkles })

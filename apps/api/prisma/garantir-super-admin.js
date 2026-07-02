@@ -8,7 +8,7 @@ const email = process.env.SUPER_ADMIN_EMAIL || 'nexusai360@gmail.com'
 // Garante o NÍVEL SUPER_ADMIN (não força a qualificação — o dono pode ajustá-la).
 const r = await prisma.user.updateMany({
   where: { email },
-  data: { papel: 'SUPER_ADMIN', nivelAcesso: 'SUPER_ADMIN', ativo: true, aprovado: true },
+  data: { nivelAcesso: 'SUPER_ADMIN', ativo: true, aprovado: true },
 })
 
 if (r.count > 0) console.log(`[super-admin] ${email} garantido como SUPER_ADMIN.`)
