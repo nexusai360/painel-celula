@@ -5,6 +5,8 @@ import { CalendarPlus, QrCode, Save, TrendingUp } from 'lucide-react'
 import { Card } from '../components/ui/Card.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Input } from '../components/ui/Input.jsx'
+import { Select } from '../components/ui/Select.jsx'
+import { DateTimePicker } from '../components/ui/DateTimePicker.jsx'
 import { StatusTag, Tag } from '../components/ui/Tag.jsx'
 import { Spinner } from '../components/ui/Spinner.jsx'
 import { MembrosPanel } from '../components/MembrosPanel.jsx'
@@ -19,14 +21,15 @@ import {
   apiFrequencia
 } from '../lib/api.js'
 import { formatarDataHora, nomeDiaSemana, paraInputDateTime } from '../lib/datas.js'
+import { weekdayDaData } from '../lib/celulaPayload.js'
 
-const DIAS = [0, 1, 2, 3, 4, 5, 6]
 const FREQUENCIAS = [
   { v: 7, label: 'Semanal' },
   { v: 14, label: 'Quinzenal (semana sim, semana não)' },
   { v: 21, label: 'A cada 3 semanas' },
   { v: 28, label: 'Mensal (a cada 4 semanas)' }
 ]
+const OPCOES_FREQ = FREQUENCIAS.map((f) => ({ value: f.v, label: f.label }))
 
 function CronogramaForm({ celula, onSalvo }) {
   const [form, setForm] = useState({
@@ -41,6 +44,11 @@ function CronogramaForm({ celula, onSalvo }) {
 
   function set(campo, valor) {
     setForm((f) => ({ ...f, [campo]: valor }))
+  }
+
+  // Dia da semana é DERIVADO da data (consistente com a criação; nunca gera mismatch).
+  function setData(v) {
+    setForm((f) => ({ ...f, dataPrimeiroEncontro: v, diaSemana: weekdayDaData(v) ?? f.diaSemana }))
   }
 
   async function salvar(e) {
@@ -64,15 +72,12 @@ function CronogramaForm({ celula, onSalvo }) {
     }
   }
 
-  const rotuloSelect =
-    'h-12 w-full rounded-xl border border-border bg-background px-4 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-brand'
-
   return (
     <Card>
       <h2 className="font-semibold text-text">Cronograma da célula</h2>
       <p className="mt-1 text-sm text-text-muted">
-        Defina o dia, a frequência e a data do primeiro encontro. O sistema gera os próximos
-        automaticamente.
+        Defina a data do primeiro encontro e a frequência. O dia da semana vem da data e o
+        sistema gera os próximos encontros automaticamente.
       </p>
       <form className="mt-5 space-y-4" onSubmit={salvar}>
         <Input id="nome" label="Nome" value={form.nome} onChange={(e) => set('nome', e.target.value)} />
@@ -82,43 +87,24 @@ function CronogramaForm({ celula, onSalvo }) {
           value={form.descricao}
           onChange={(e) => set('descricao', e.target.value)}
         />
+        <DateTimePicker
+          label="Primeiro encontro"
+          value={form.dataPrimeiroEncontro}
+          onChange={setData}
+          required
+        />
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-text">Dia da semana</label>
-            <select
-              className={rotuloSelect}
-              value={form.diaSemana}
-              onChange={(e) => set('diaSemana', e.target.value)}
-            >
-              {DIAS.map((d) => (
-                <option key={d} value={d}>
-                  {nomeDiaSemana(d)}
-                </option>
-              ))}
-            </select>
+            <div className="flex h-12 items-center rounded-xl border border-border bg-surface px-4 text-sm text-text-muted">
+              {form.dataPrimeiroEncontro ? nomeDiaSemana(Number(form.diaSemana)) : 'Definido pela data acima'}
+            </div>
           </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-text">Frequência</label>
-            <select
-              className={rotuloSelect}
-              value={form.frequenciaDias}
-              onChange={(e) => set('frequenciaDias', e.target.value)}
-            >
-              {FREQUENCIAS.map((f) => (
-                <option key={f.v} value={f.v}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-text">Primeiro encontro</label>
-          <input
-            type="datetime-local"
-            className={rotuloSelect}
-            value={form.dataPrimeiroEncontro}
-            onChange={(e) => set('dataPrimeiroEncontro', e.target.value)}
+          <Select
+            label="Frequência"
+            options={OPCOES_FREQ}
+            value={Number(form.frequenciaDias)}
+            onChange={(v) => set('frequenciaDias', v)}
           />
         </div>
         <Button type="submit" loading={salvando} className="w-auto px-5">
