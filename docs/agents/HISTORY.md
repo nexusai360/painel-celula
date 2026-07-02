@@ -28,3 +28,13 @@
 - Segmentação de avisos por 3 eixos AND (células/qualificações/níveis + flags Todas, dedup, SUPER casa ADMIN); banner CRUD com expiração + carrossel; notificação leitura por item (`NotificacaoLeitura`) + marcar-tudo + modal; `SeletorPublico`.
 - Spec v3→R1→v4→R2→v5 (2 reviews adversariais). ~70 commits atômicos. 17 migrações validadas em DB fresco. Validado E2E local + prod.
 - **Deploy live: https://celula.nexusai360.com** (commit 228a394). Pendente: reescrever testes de ROTA da API p/ CI verde (dívida de teste; não bloqueia deploy — build.yml independente do ci.yml). Ver HANDOFF-2026-07-02-refactor-nivel-qualificacao-lideranca-segmentacao.md.
+
+## 2026-07-02 — Reforma UX de Usuários + fixes (batch pós-feedback do dono) [ca9d0bb]
+- **Tela de Usuários (lista):** removidos os selects inline de qualificação/nível e o texto/animação de status; agora só badge de qualificação (leitura), ícone de status (ativo/inativo/pendente/reprovado) e lápis. Admin pode editar a si mesmo (super admin muda a própria qualificação → Pastor).
+- **Modal de edição redesenhado:** Nome, E-mail (editável), WhatsApp (máscara + validação), Nova senha (reset pelo admin), Qualificação e Nível em linhas próprias (dropdown via portal, não corta mais), Conta ativa. Edição própria reflete no header/perfil.
+- **Backend novo:** `POST /usuarios` (admin cria já aprovado/ativo, RBAC), `PATCH /usuarios/:id/senha` (reset). Schemas: create/reset + WhatsApp validado (rejeita texto). API client: apiCriarUsuario/apiRedefinirSenha.
+- **"Minha célula":** payload do usuário expõe `minhasCelulas` (lideradas ∪ criadas, dedup); gate/nav liberam para membro OU líder/criador (corrige aba bloqueada). AppHome mostra seletor quando há >1 célula.
+- **DateTimePicker:** abre no clique/foco do input; aniversário começa na seleção de ANO→mês→dia; portal (não corta em card/modal). Perfil: WhatsApp com máscara + validação.
+- **Aba "Criar usuário"** na Administração de Usuários.
+- **Provisionamento do dono:** `criar-admin.js` não sobrescreve mais nome/qualificação/senha de conta existente (fim do "nome volta ao padrão no deploy"); acesso segue via `garantir-super-admin.js`.
+- **Validação:** build web verde, 59 testes web verdes, E2E real contra o banco (container reconstruído): login/minhasCelulas(4)/criar/reset/duplicado/inválido/self-qualif todos corretos; nome do dono preservado no deploy. Deploy live (build.yml success).
