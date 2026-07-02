@@ -1,305 +1,225 @@
 # Reforma UI/RBAC/Células — Plano de Implementação
 
-> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (execução inline nesta sessão, com checkpoints). Frontend SEMPRE com `ui-ux-pro-max`. Steps usam checkbox (`- [ ]`).
+> **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (execução inline, checkpoints). Frontend SEMPRE com `ui-ux-pro-max`. Steps em checkbox (`- [ ]`).
 
-**Status:** **plano v1** (segue ciclo v1 → R1 → v2 → R2 → v3 antes de executar).
-**Spec:** `docs/superpowers/specs/2026-07-02-reforma-ui-rbac-celulas-design.md` (v3 final).
+**Status:** **plano v2** (v1 → Review 1 [2 lentes] → **v2** → Review 2 → v3). **Spec:** `docs/superpowers/specs/2026-07-02-reforma-ui-rbac-celulas-design.md` (v3).
 
-**Goal:** Reformar a UI (prata cromado, nível Insights), o RBAC (admin nomeia admin; super = dono) e os fluxos (aprovação do líder, seleção de célula, cadastro de célula) do Painel de Célula, sem regressão e com cada fase deployável na `main`.
+**Goal:** Reformar UI (prata cromado, nível Insights), RBAC (admin nomeia admin; super = dono) e fluxos (aprovação do líder, seleção de célula, cadastro de célula) sem regressão, cada fase deployável na `main`.
+**Architecture:** Monorepo npm (`apps/api` Fastify+Prisma; `apps/web` React 19+Vite+Tailwind v4, primitivos próprios). Primitivos primeiro, depois RBAC backend (TDD), depois telas por área. Direto na `main`, commits atômicos.
+**Tech Stack:** React 19, Vite, Tailwind v4, framer-motion, react-hook-form, zod, lucide, **vitest (api E web)**, Fastify, Prisma/Postgres.
 
-**Architecture:** Monorepo npm (`apps/api` Fastify+Prisma; `apps/web` React 19+Vite+Tailwind v4, primitivos próprios). Fundação de primitivos de UI primeiro, depois RBAC no backend com testes, depois telas por área. Trabalho direto na `main`, TDD, commits atômicos.
+## 0. Histórico de revisões (v1 → v2, incorpora Review 1 do plano)
+- **A1** Guard `PUT /:id` **exempta o próprio usuário** (`id !== request.usuario.id`) — senão quebra auto-edição e o teste "auto-inativa→400". SUPER→SUPER: guard deixa passar (só checa alvo super quando editor≠super — ver 1.2).
+- **A2** Coerência dia×data: weekday derivado dos **componentes da string** via `Date.UTC(y,m-1,d).getUTCDay()` (TZ-independente), **não** `new Date(str).getUTCDay()`. Teste noturno sob TZ BRT.
+- **A3** Entrypoint chama `garantir-super-admin` **incondicionalmente** (default do script age); script instancia `PrismaClient` e `$disconnect()`.
+- **A4** Task de rotas edita **`InicioOuCelulas`** (admin sem célula → `/app/admin/usuarios`) e os `to:` dos links admin, evitando duplo-redirect.
+- **P1** Fase 3 reordenada: telas admin **primeiro**; **redirects na última task**.
+- **P2/P3/P5/M5** Extrair funções puras testáveis: `opcoesDePapel`/`podeAgirSobre` (RBAC-UI), `mapBackEstadoCivil`, `montarPayloadCelula` — com teste-first.
+- **P4** Novo primitivo **`Popover`** (Fase 0) antes de `RoleSelect`; reusado na legenda "?".
+- **P6** `AdminUsuarios` quebrada em **3.4a Pendentes** / **3.4b Todos**.
+- **P7/M3** `migrate dev` roda contra **DB local**; commita só `migration.sql`; build faz `prisma generate`; **`cep` em `enderecoFields`** (create+update); remover `agente schema-changed` (modo main).
+- **P8** 4.x: refine só liga **após** o front mandar wall-clock (ordem: front primeiro, refine depois) — ou aterrissam juntos.
+- **P10** `.chrome`/foco (CSS) vira **Task 0.0** (início da Fase 0).
+- **M1** Badge de pendências: task com contagem + fiação no switcher, item Usuários e **Sino**.
+- **M2** Aprovação em massa = **loop client-side** com erro parcial + Toast agregado (sem endpoint bulk).
+- **M4** Task 2.2 removida (admin inativo nem carrega `/me`; fix é operacional em 2.1).
+- **B1/B2** vitest (não jest); schema é `updateCelulaSchema`.
 
-**Tech Stack:** React 19, Vite, Tailwind v4 (sem shadcn/base-ui), framer-motion, react-hook-form, zod, lucide, vitest (web) / jest (api), Fastify, Prisma/Postgres.
-
-## Global Constraints (verbatim da spec)
-- Trabalho **direto na `main`** (sem worktree). Deploy por push (CI→GHCR→Shepherd); `docker/entrypoint.sh` já roda `prisma:deploy` antes do boot. Cada fase **deployável**.
-- Marca **prata cromada** (`--brand #64748b` light / `#b9c1cd` dark); **não** trocar por azul/violeta. Fontes **Inter/Sora**. Dark por classe `.dark`.
-- Chips: `bg-{cor}-500/10 border border-{cor}-500/30 text-{cor}-700 dark:text-{cor}-400` + ícone + texto. Papéis: Membro=zinc/Eye, Líder=amber/Shield, Admin=blue/ShieldCheck, Super=purple/Crown. Status: Em aprovação=amber/Clock, Ativo=emerald/UserCheck, Inativo=red/UserX.
-- Token de foco único: `focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background`.
-- Larguras: listas admin `max-w-6xl`; forms/leitura `max-w-2xl`; membro `max-w-3xl`.
-- Micro-interações 150–300ms; `prefers-reduced-motion` sempre. Toque ≥44px. `cursor-pointer` em clicáveis.
-- Frontend **sempre** com skill `ui-ux-pro-max`. Local: `npm run app:up` → http://localhost:3200. Testes: `npm test` (api+web) verde antes de cada commit de fase.
-- **Não** mover `materializarEncontros` para dentro da transação. **Não** validar `diaSemana` no check-in do QR. Estado civil grava só em transição do checkbox.
-
-## File Structure
-
-**Fase 0 — primitivos** (`apps/web/src/components/ui/` salvo indicado):
-- Create: `hooks/useOverlayDismiss.js` (extraído do Sheet), `ui/Modal.jsx`, `ui/Tabs.jsx`, `ui/Checkbox.jsx`, `ui/Combobox.jsx`, `ui/RoleBadge.jsx`, `ui/StatusBadge.jsx`, `ui/RoleSelect.jsx`, `ui/ContextSwitcher.jsx`, `ui/Skeleton.jsx`, `ui/EmptyState.jsx`, `ui/Toast.jsx` (+ provider), `lib/mascaras.js`, `lib/cidades.js`, `lib/avatarCor.js`.
-- Modify: `components/ui/Sheet.jsx` (consumir hook), `lib/papeis.js` (+CORES_PAPEL/ehLider/ehGestor), `index.css` (`.chrome`, token de foco util), `main.jsx`/`App.jsx` (montar ToastProvider).
-- Test: `*.test.js(x)` colocados junto (vitest).
-
-**Fase 1 — RBAC** (`apps/api/`):
-- Modify: `src/lib/roles.js` (podeEditarPapel), `src/routes/usuarios.js` (guard PUT), `docker/entrypoint.sh`.
-- Create: `prisma/garantir-super-admin.js`; `package.json` script `admin:super`.
-- Test: `src/lib/roles.test.js`, `src/routes/usuarios.test.js`.
-
-**Fase 3 — shell + usuarios + aprovações** (`apps/web/`):
-- Create: `pages/admin/AdminLayout.jsx`, `pages/admin/AdminUsuarios.jsx`, `pages/Aprovacoes.jsx`.
-- Modify: `App.jsx` (route-group, /app/aprovacoes, redirects), `components/TopBar.jsx` (ContextSwitcher, links, badge), `pages/Usuarios.jsx` (→ mover conteúdo/מtirar avisos) ou substituir.
-
-**Fase 4 — células** (`apps/api` + `apps/web`):
-- Modify: `apps/api/prisma/schema.prisma` (+cep), `src/routes/celulas.js` (schema coerção+refine), `apps/web/src/pages/Celulas.jsx` (form multi-step), `lib/api.js` (cep).
-- Create: `apps/api/prisma/migrations/<ts>_cep/migration.sql`.
-
-**Fases 5–8:** `pages/Perfil.jsx`, `pages/Register.jsx`, `components/ConjugeSecao.jsx`, `pages/SelecionarCelula.jsx`, `components/CelulaPicker.jsx`, `pages/Aguardando.jsx`, `pages/QrLanding.jsx`, e varredura de `<select>/<input>` crus (`CronogramaForm`, etc.).
+## Global Constraints (verbatim)
+- Direto na `main`; deploy por push; `docker/entrypoint.sh` já roda `prisma:deploy` antes do boot; cada fase deployável.
+- Marca **prata cromada** (`--brand #64748b`/`#b9c1cd`); Inter/Sora; dark por classe.
+- Chip: `bg-{cor}-500/10 border border-{cor}-500/30 text-{cor}-700 dark:text-{cor}-400` + ícone + texto. Papéis: Membro zinc/Eye, Líder amber/Shield, Admin blue/ShieldCheck, Super purple/Crown. Status: Em aprovação amber/Clock, Ativo emerald/UserCheck, Inativo red/UserX.
+- Foco único: `focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background`.
+- Larguras: admin `max-w-6xl`; forms `max-w-2xl`; membro `max-w-3xl`. 150–300ms; reduced-motion; toque ≥44px.
+- Frontend sempre `ui-ux-pro-max`. Local `npm run app:up`→http://localhost:3200. `npm test` verde antes do commit de fase.
+- Não mover `materializarEncontros`; não validar `diaSemana` no check-in; estado civil grava só em transição.
 
 ---
 
 ## FASE 0 — Fundação de UI
 
-### Task 0.1: Extrair `useOverlayDismiss` do Sheet (F2)
-**Files:** Create `apps/web/src/hooks/useOverlayDismiss.js`; Modify `apps/web/src/components/ui/Sheet.jsx`; Test `apps/web/src/hooks/useOverlayDismiss.test.jsx`.
-**Interfaces:** Produces `useOverlayDismiss(open: boolean, onClose: ()=>void, panelRef: Ref) : void` — aplica scroll-lock em `document.body`, focus-trap (Tab/Shift+Tab dentro de `panelRef`), Esc→onClose, e restaura o foco ao elemento anterior no unmount/close.
-- [ ] **Step 1:** Escrever teste: montar componente com hook + panel com 2 botões; abrir → `document.body.style.overflow==='hidden'`; Tab no último volta ao primeiro; Esc chama onClose; fechar → overflow restaurado e foco restaurado.
-- [ ] **Step 2:** Rodar `npm test -w apps/web -- useOverlayDismiss` → FAIL.
-- [ ] **Step 3:** Implementar o hook movendo a lógica hoje inline em `Sheet.jsx` (os `useEffect` de lock/trap/Esc). Manter comportamento idêntico.
-- [ ] **Step 4:** Refatorar `Sheet.jsx` para chamar `useOverlayDismiss(open,onClose,panelRef)`, preservando o drag-to-dismiss (que fica no Sheet) e o `tituloId`.
-- [ ] **Step 5:** Rodar testes do Sheet existentes + novo → PASS. Verificar no browser que o Sheet ainda abre/fecha/arrasta.
-- [ ] **Step 6:** Commit `refactor(ui): extrai useOverlayDismiss do Sheet (base p/ Modal)`.
-
-### Task 0.2: `lib/papeis.js` — CORES_PAPEL, ehLider, ehGestor
-**Files:** Modify `apps/web/src/lib/papeis.js`; Test `apps/web/src/lib/papeis.test.js`.
-**Interfaces:** Produces `CORES_PAPEL: Record<Papel,{chip:string,icon:LucideIcon,label:string}>`, `CORES_STATUS: Record<'PENDENTE'|'ATIVO'|'INATIVO',{chip,icon,label}>`, `ehLider(papel):boolean`, `ehGestor(papel):boolean`.
-- [ ] **Step 1:** Teste: `ehGestor('LIDER')===true`, `ehLider('ADMIN')===false`, `CORES_PAPEL.ADMIN.chip` contém `blue` e `text-blue-700 dark:text-blue-400`.
-- [ ] **Step 2:** `npm test -w apps/web -- papeis` → FAIL.
-- [ ] **Step 3:** Implementar. `chip` = `bg-{c}-500/10 border border-{c}-500/30 text-{c}-700 dark:text-{c}-400`. Ícones lucide (Eye/Shield/ShieldCheck/Crown; Clock/UserCheck/UserX). `ehGestor = rank>=LIDER`, `ehLider = papel==='LIDER'`.
-- [ ] **Step 4:** Testes → PASS.
-- [ ] **Step 5:** Commit `feat(ui): CORES_PAPEL/CORES_STATUS + ehLider/ehGestor`.
-
-### Task 0.3: `lib/mascaras.js` (CEP, telefone)
-**Files:** Create `apps/web/src/lib/mascaras.js`; Test junto.
-**Interfaces:** `mascaraCep(v:string):string` → `00000-000`; `mascaraTelefone(v:string):string` → `(00) 00000-0000`; `soDigitos(v):string`.
-- [ ] **Step 1:** Teste: `mascaraCep('74000000')==='74000-000'`; `mascaraCep('7400')==='7400'`; `mascaraTelefone('62999998888')==='(62) 99999-8888'`; ignora não-dígitos.
-- [ ] **Step 2:** FAIL. **Step 3:** Implementar por slicing de dígitos. **Step 4:** PASS. **Step 5:** Commit `feat(ui): mascaras de CEP e telefone`.
-
-### Task 0.4: `lib/avatarCor.js` (cor determinística por nome — P3)
-**Files:** Create + test.
-**Interfaces:** `corDoNome(nome:string):{bg:string,fg:string}` — hash estável do nome → HSL de baixa saturação (grafite-tingido), `fg` branco/near-white.
-- [ ] **Step 1:** Teste: mesma string → mesma cor (determinístico); strings diferentes → hues diferentes; retorna `hsl(...)`.
-- [ ] **Step 2:** FAIL. **Step 3:** hash (soma de charCodes) % 360 → `hsl(h, 22%, 42%)`. **Step 4:** PASS. **Step 5:** Commit.
-
-### Task 0.5: `lib/cidades.js` (lista curada)
-**Files:** Create + test. **Interfaces:** `CIDADES: string[]` (capitais + municípios comuns de GO e grandes BR, ~120); `filtrarCidades(q):string[]`.
-- [ ] Step 1: teste `filtrarCidades('goi')` inclui `'Goiânia'`; lista não vazia. Steps 2–5 (FAIL→impl→PASS→commit `feat(ui): lista curada de cidades`).
-
-### Task 0.6: `Checkbox.jsx`
-**Files:** Create + test. **Interfaces:** `<Checkbox checked onChange label id disabled />` — `role` nativo `<input type=checkbox>` estilizado, `aria-checked`, foco visível (token), 44px hit area.
-- [ ] Step 1: teste render com label associado (`getByLabelText`), click chama onChange(!checked), teclado espaço alterna. Steps 2–5 (FAIL→impl→PASS→commit).
-
-### Task 0.7: `Tabs.jsx`
-**Files:** Create + test. **Interfaces:** `<Tabs value onValueChange>`, `<TabsList>`, `<TabsTrigger value>`, `<TabsContent value>`; variante pill (default). A11y: `role=tablist/tab/tabpanel`, `aria-selected`, setas←→/Home/End, roving tabindex.
-- [ ] Step 1: teste — clicar trigger muda painel; seta direita move foco/seleção; `aria-selected` correto. Steps 2–5 (FAIL→impl com framer-motion no indicador→PASS→commit).
-
-### Task 0.8: `Modal.jsx` (usa 0.1)
-**Files:** Create + test. **Interfaces:** `<Modal open onClose titulo footer size children>` — overlay `bg-black/60 backdrop-blur-sm`, painel `rounded-2xl bg-card ring-1 ring-border shadow-2xl`, usa `useOverlayDismiss`, `aria-modal`, `aria-labelledby` (titulo), foco inicial no painel, restore no close, framer-motion (scale+fade).
-- [ ] Step 1: teste — open renderiza titulo; Esc/onClose; foco vai ao painel; click no overlay fecha. Steps 2–5.
-
-### Task 0.9: `Combobox.jsx`
-**Files:** Create + test. **Interfaces:** `<Combobox value onChange options=[{value,label,description?,avatar?}] placeholder allowCustom? renderMobileAsSheet? />`. A11y: `role=combobox`, `aria-expanded/controls/activedescendant`, `listbox/option`, type-ahead, Esc fecha, `allowCustom` injeta valor livre digitado. Mobile: abre em `Sheet`.
-- [ ] Step 1: teste — digitar filtra; escolher chama onChange; `allowCustom` permite valor fora da lista; teclado ↑↓/Enter/Esc. Steps 2–5.
-
-### Task 0.10: `RoleBadge.jsx` + `StatusBadge.jsx`
-**Files:** Create + test. **Interfaces:** `<RoleBadge papel />`, `<StatusBadge status />` usando `CORES_PAPEL`/`CORES_STATUS` (chip + ícone + label). Super Admin usa classe `.chrome`.
-- [ ] Step 1: teste render `Administrador` com classes blue; StatusBadge `Em aprovação` amber. Steps 2–5.
-
-### Task 0.11: `RoleSelect.jsx` (chip-trigger — P7)
-**Files:** Create + test. **Interfaces:** `<RoleSelect value opcoes=[papel...] onChange disabled readOnly />`. Trigger = `RoleBadge` clicável com **hit area ≥44px** (padding sem inchar visual); `aria-haspopup=listbox`, `aria-expanded`; **Popover no desktop / Sheet no mobile**; `readOnly`→`RoleBadge` estático; `opcoes` já filtradas pelo chamador (papéis que o editor pode conceder).
-- [ ] Step 1: teste — click abre lista com `opcoes`; escolher chama onChange; readOnly não abre; teclado. Steps 2–5.
-
-### Task 0.12: `ContextSwitcher.jsx` (P9)
-**Files:** Create + test. **Interfaces:** `<ContextSwitcher contexto onChange podeAdmin temCelula />` — SegmentedControl ícone+rótulo (Shield=Administração, Users=Minha célula); segmento ativo `.chrome`; aba "Minha célula" desabilitada se `!temCelula` (F13); em `<md` colapsa em botão-ícone que abre `Sheet`.
-- [ ] Step 1: teste — sem temCelula, opção Minha célula disabled; onChange dispara; não renderiza se `!podeAdmin`. Steps 2–5.
-
-### Task 0.13: `Skeleton.jsx` + `EmptyState.jsx` (P2)
-**Files:** Create + test. **Interfaces:** `<Skeleton className/>` (shimmer, reduced-motion), `<SkeletonLinhas n/>`; `<EmptyState icon titulo subtitulo acao?/>` (ícone-em-caixinha `bg-brand/10`).
-- [ ] Step 1: teste render EmptyState com titulo/ação; Skeleton tem `aria-hidden`. Steps 2–5.
-
-### Task 0.14: `Toast.jsx` + provider (P6)
-**Files:** Create `ui/Toast.jsx`; Modify `App.jsx`/`main.jsx`; Test. **Interfaces:** `useToast()` → `{sucesso(msg), erro(msg), info(msg)}`; provider global; `aria-live=polite`; não rouba foco; auto-dismiss 4s; canto inferior; reduced-motion.
-- [ ] Step 1: teste — `sucesso('ok')` renderiza role=status com texto; some após timeout (fake timers). Steps 2–5. Montar `<ToastProvider>` em volta do app.
-
-### Task 0.15: `index.css` — `.chrome` + token de foco util (§4.6)
+### Task 0.0: `index.css` — `.chrome` + util de foco (mover pro início, P10)
 **Files:** Modify `apps/web/src/index.css`.
-- [ ] **Step 1:** Adicionar `.chrome { background-image: linear-gradient(180deg,#8b95a5 0%,#6b7280 45%,#515e70 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 -1px 2px rgba(0,0,0,.18); color: var(--on-brand);}` e variante `.dark .chrome { background-image: linear-gradient(180deg,#e6ebf1 0%,#c3ccd7 50%,#aab4c2 100%);}`; `.foco { @apply focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background outline-none; }`.
-- [ ] **Step 2:** Verificar no browser (dark/light) que `.chrome` num botão fica metálico e o texto legível (AA).
+- [ ] **Step 1:** Adicionar `.chrome { background-image: linear-gradient(180deg,#8b95a5 0%,#6b7280 45%,#515e70 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,.28), inset 0 -1px 2px rgba(0,0,0,.18); color: var(--on-brand);}` + `.dark .chrome { background-image: linear-gradient(180deg,#e6ebf1 0%,#c3ccd7 50%,#aab4c2 100%);}` + `.foco { @apply outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background; }`.
+- [ ] **Step 2:** Verificar no browser (dark/light) que `.chrome` fica metálico e texto AA.
 - [ ] **Step 3:** Commit `feat(ui): acabamento cromado (.chrome) + util de foco`.
 
-> **Checkpoint Fase 0:** `npm test` verde; `tsc`/lint web sem erros novos; primitivos renderizam num sandbox/story manual. Commit de fecho da fase.
+### Task 0.1: Extrair `useOverlayDismiss` do Sheet (F2)
+**Files:** Create `apps/web/src/hooks/useOverlayDismiss.js`; Modify `components/ui/Sheet.jsx`; Test `hooks/useOverlayDismiss.test.jsx`.
+**Interfaces:** Produces `useOverlayDismiss(open, onClose, panelRef): void` — scroll-lock `document.body`, focus-trap (Tab/Shift+Tab) em `panelRef`, Esc→onClose, restaura foco anterior no close.
+- [ ] Step 1: teste (abrir→overflow hidden; Tab cicla; Esc→onClose; fechar→overflow e foco restaurados). Step 2: FAIL. Step 3: mover a lógica inline de `Sheet.jsx` (useEffect 17–74) para o hook. Step 4: refatorar Sheet consumindo o hook, mantendo drag e `tituloId`. Step 5: testes Sheet+novo PASS; verificar drag no browser. Step 6: Commit `refactor(ui): extrai useOverlayDismiss do Sheet`.
+- [ ] **CHECKPOINT (P9):** Sheet sem regressão de drag/restore antes de seguir.
+
+### Task 0.2: `lib/papeis.js` — CORES_PAPEL/CORES_STATUS + ehLider/ehGestor + funções RBAC-UI (P2)
+**Files:** Modify `lib/papeis.js`; Test `lib/papeis.test.js`.
+**Interfaces:** `CORES_PAPEL`, `CORES_STATUS` (`{chip,icon,label}`), `ehLider`, `ehGestor`; **`opcoesDePapel(editorPapel, alvoPapel): Papel[]`** (papéis que o editor pode atribuir ao alvo, via `podeEditarPapel`) e **`podeAgirSobre(editorPapel, alvo): boolean`** (pode ativar/desativar/editar: false se alvo é si, super, ou admin quando editor≠super).
+- [ ] Step 1: testes — `ehGestor('LIDER')` true; `CORES_PAPEL.ADMIN.chip` tem `blue`/`text-blue-700 dark:text-blue-400`; `opcoesDePapel('ADMIN','MEMBRO')` inclui `MEMBRO,LIDER,ADMIN` e **não** `SUPER_ADMIN`; `opcoesDePapel('ADMIN','ADMIN')` **não** permite rebaixar (só super); `podeAgirSobre('ADMIN', {papel:'ADMIN',id:'x'})` false; `podeAgirSobre('SUPER_ADMIN',{papel:'ADMIN'})` true.
+- [ ] Step 2: FAIL. Step 3: implementar (reusa `podeEditarPapel` do backend? não — replicar a regra no front como fonte única `lib/papeis.js`). Step 4: PASS. Step 5: Commit `feat(ui): cores/roles + opcoesDePapel/podeAgirSobre`.
+
+### Task 0.3: `lib/mascaras.js` (CEP/telefone) — Create+test
+`mascaraCep`(→`00000-000`), `mascaraTelefone`(→`(00) 00000-0000`), `soDigitos`. Teste com entrada suja. FAIL→impl→PASS→commit.
+
+### Task 0.4: `lib/avatarCor.js` (P3) — Create+test
+`corDoNome(nome)→{bg:'hsl(h,22%,42%)',fg}` determinístico (hash charCodes%360). Teste determinismo. FAIL→impl→PASS→commit.
+
+### Task 0.5: `lib/cidades.js` — Create+test
+`CIDADES` (capitais + municípios GO/BR comuns, ~120), `filtrarCidades(q)`. Teste `filtrarCidades('goi')` inclui `Goiânia`. FAIL→impl→PASS→commit.
+
+### Task 0.6: `Checkbox.jsx` — Create+test
+`<Checkbox checked onChange label id disabled/>` (input nativo estilizado, `.foco`, 44px). Teste `getByLabelText`+espaço alterna. FAIL→impl→PASS→commit.
+
+### Task 0.7: `Popover.jsx` (P4) — Create+test
+**Interfaces:** `<Popover trigger content open onOpenChange align/>` — âncora + outside-click + Esc + foco + `role`, reposiciona em colisão de borda. Base de `RoleSelect` (desktop) e legenda "?".
+- [ ] Step 1: teste — abre no click do trigger; outside-click/Esc fecham; conteúdo tem foco. FAIL→impl→PASS→commit.
+
+### Task 0.8: `Tabs.jsx` — Create+test
+`Tabs/List/Trigger/Content` (`value/onValueChange`, pill). A11y `tablist/tab/tabpanel`, `aria-selected`, ←→/Home/End, roving tabindex. Teste click+seta. FAIL→impl→PASS→commit.
+
+### Task 0.9: `Modal.jsx` (usa 0.1) — Create+test
+`<Modal open onClose titulo footer size children/>` overlay `bg-black/60 backdrop-blur-sm`, painel `rounded-2xl ring-1`, `aria-modal`/`aria-labelledby`, foco inicial+restore, framer scale+fade. Teste open/Esc/overlay-click. FAIL→impl→PASS→commit.
+
+### Task 0.10: `Combobox.jsx` — Create+test
+`<Combobox value onChange options placeholder allowCustom renderMobileAsSheet/>`. `role=combobox`, `aria-expanded/controls/activedescendant`, type-ahead, `allowCustom` injeta livre; mobile→Sheet. Teste filtro/escolha/custom/teclado. FAIL→impl→PASS→commit.
+
+### Task 0.11: `RoleBadge`+`StatusBadge` — Create+test
+Usam `CORES_PAPEL`/`CORES_STATUS`. Super Admin `.chrome`. Teste classes. FAIL→impl→PASS→commit.
+
+### Task 0.12: `RoleSelect.jsx` (P7, usa 0.7/0.11) — Create+test
+`<RoleSelect value opcoes onChange readOnly/>` — trigger=`RoleBadge` clicável hit-area ≥44px, `aria-haspopup=listbox`, `Popover` desktop/`Sheet` mobile, `readOnly`→`RoleBadge` estático. `opcoes` já filtradas pelo chamador (`opcoesDePapel`). Teste abrir/escolher/readOnly/teclado. FAIL→impl→PASS→commit.
+
+### Task 0.13: `ContextSwitcher.jsx` (P9 spec, usa Sheet mobile) — Create+test
+`<ContextSwitcher contexto onChange podeAdmin temCelula badge/>` — Segmented ícone+rótulo, ativo `.chrome`, aba "Minha célula" disabled se `!temCelula` (F13), badge de pendências no segmento Administração; `<md` colapsa em botão→Sheet; não renderiza se `!podeAdmin`; **limpa preferência no logout** (expor helper `limparContexto(id)`). Teste disabled/onChange/badge. FAIL→impl→PASS→commit.
+
+### Task 0.14: `Skeleton`+`EmptyState` — Create+test
+`<Skeleton/>` (shimmer, reduced-motion, `aria-hidden`), `<SkeletonLinhas n/>`, `<EmptyState icon titulo subtitulo acao/>`. Teste render. FAIL→impl→PASS→commit.
+
+### Task 0.15: `Toast` + provider — Create+test; Modify `App.jsx`
+`useToast()→{sucesso,erro,info}`, `aria-live=polite`, não rouba foco, auto-dismiss 4s, reduced-motion. Montar `<ToastProvider>` no App. Teste (fake timers). FAIL→impl→PASS→commit.
+
+> **CHECKPOINT Fase 0:** `npm test` verde; `tsc`/lint web ok; primitivos renderizam. Commit de fecho.
 
 ---
 
-## FASE 1 — RBAC / hierarquia (backend + super admin)
+## FASE 1 — RBAC / hierarquia (backend)
 
-### Task 1.1: `podeEditarPapel` novo (F6)
-**Files:** Modify `apps/api/src/lib/roles.js`; Test `apps/api/src/lib/roles.test.js`.
-**Interfaces:** `podeEditarPapel(editor:Papel, atual:Papel, novo:Papel):boolean` (pseudocódigo da spec §4.1).
-- [ ] **Step 1:** Testes (matriz): ADMIN promove MEMBRO→LIDER (true) e MEMBRO→ADMIN (true); ADMIN rebaixa ADMIN→MEMBRO (**false**); ADMIN concede SUPER (**false**); SUPER faz tudo (true); ADMIN edita SUPER (false).
-- [ ] **Step 2:** `npm test -w apps/api -- roles` → FAIL.
-- [ ] **Step 3:** Reescrever a função exatamente como o pseudocódigo (ordem: novo/atual super → super; atual admin → super; novo admin → admin+; default admin+).
-- [ ] **Step 4:** PASS. **Step 5:** Commit `feat(api): admin nomeia admin; mexer em admin/super é do super (podeEditarPapel)`.
+### Task 1.1: `podeEditarPapel` novo (F6) — Modify `apps/api/src/lib/roles.js`; Test `roles.test.js`
+**Interfaces:** `podeEditarPapel(editor, atual, novo): boolean`.
+- [ ] Step 1: matriz — ADMIN: MEMBRO→LIDER ✓, MEMBRO→ADMIN ✓, ADMIN→MEMBRO ✗, →SUPER ✗, edita SUPER ✗; SUPER: tudo ✓.
+- [ ] Step 2: FAIL. Step 3: implementar (ordem spec §4.1: novo/atual super→super; atual admin→super; novo admin→admin+; default admin+). Step 4: PASS. Step 5: Commit.
 
-### Task 1.2: Guard único no `PUT /usuarios/:id` (F5)
-**Files:** Modify `apps/api/src/routes/usuarios.js`; Test `usuarios.test.js`.
-- [ ] **Step 1:** Teste: ADMIN faz `PUT /usuarios/:id` (alvo SUPER) → 403; ADMIN edita outro ADMIN → 403; SUPER edita ADMIN → ok; ADMIN edita MEMBRO → ok.
-- [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** Após `const alvo = await prisma.user.findUnique(...)`, inserir: `if (alvo.papel==='SUPER_ADMIN' || (alvo.papel==='ADMIN' && request.usuario.papel!=='SUPER_ADMIN')) return reply.code(403).send({erro:'Sem permissão'})`.
-- [ ] **Step 4:** PASS (+ testes existentes verdes). **Step 5:** Commit `fix(api): admin nao edita/desativa admin ou super (guard PUT)`.
+### Task 1.2: Guard `PUT /usuarios/:id` com self-exempt (A1) — Modify `routes/usuarios.js`; Test
+- [ ] Step 1: testes — ADMIN edita OUTRO admin→403; ADMIN edita SUPER→403; ADMIN **auto-inativa→400** (guard não preempta); ADMIN edita próprio nome→200; SUPER edita admin→200.
+- [ ] Step 2: FAIL (ver que sem self-exempt o teste 400 quebra). Step 3: após `findUnique`, `if (id !== request.usuario.id && (alvo.papel==='SUPER_ADMIN' || (alvo.papel==='ADMIN' && request.usuario.papel!=='SUPER_ADMIN'))) return reply.code(403).send({erro:'Sem permissão'})`. Step 4: PASS + existentes verdes. Step 5: Commit.
 
-### Task 1.3: `garantir-super-admin.js` + entrypoint (F4)
-**Files:** Create `apps/api/prisma/garantir-super-admin.js`; Modify `apps/api/package.json`, `docker/entrypoint.sh`.
-- [ ] **Step 1:** Script idempotente: lê `process.env.SUPER_ADMIN_EMAIL || 'nexusai360@gmail.com'`; `updateMany({where:{email}, data:{papel:'SUPER_ADMIN',ativo:true,aprovado:true}})`; loga resultado; não cria usuário do zero (só promove se existe).
-- [ ] **Step 2:** `package.json` script `"admin:super":"node prisma/garantir-super-admin.js"`.
-- [ ] **Step 3:** `entrypoint.sh`: após o bloco `migrate deploy`, adicionar `if [ -n "$SUPER_ADMIN_EMAIL" ]; then npm run admin:super -w apps/api || true; fi` (guardado, não-fatal).
-- [ ] **Step 4:** Rodar local `SUPER_ADMIN_EMAIL=nexusai360@gmail.com npm run admin:super -w apps/api`; verificar no banco `papel=SUPER_ADMIN` (já é — idempotente, sem erro).
-- [ ] **Step 5:** Commit `feat(api): garantir-super-admin idempotente + entrypoint`.
+### Task 1.3: `garantir-super-admin.js` + entrypoint (A3, F4) — Create script; Modify `package.json`, `docker/entrypoint.sh`
+- [ ] Step 1: script: `import { PrismaClient }`; `const prisma=new PrismaClient()`; `const email=process.env.SUPER_ADMIN_EMAIL||'nexusai360@gmail.com'`; `await prisma.user.updateMany({where:{email},data:{papel:'SUPER_ADMIN',ativo:true,aprovado:true}})`; log; `await prisma.$disconnect()`. Não cria do zero.
+- [ ] Step 2: `package.json` `"admin:super":"node prisma/garantir-super-admin.js"`.
+- [ ] Step 3: `entrypoint.sh` após `migrate deploy`: `npm run admin:super -w apps/api || true` (**incondicional**, não-fatal).
+- [ ] Step 4: local `npm run admin:super -w apps/api`; conferir `papel=SUPER_ADMIN` (idempotente). Step 5: Commit.
 
-> **Checkpoint Fase 1:** `npm test` api verde. Deployável (guard mais restritivo; script idempotente).
+> **CHECKPOINT Fase 1:** `npm test` api verde; deployável.
 
 ---
 
 ## FASE 2 — Diagnóstico "admin não vê usuários" (F12)
 
-### Task 2.1: Reproduzir e diagnosticar (systematic-debugging)
-- [ ] **Step 1:** Confirmar no banco: `SELECT papel,aprovado,ativo FROM "User" WHERE papel IN ('ADMIN','SUPER_ADMIN')` (o admin de teste está `ativo=false`).
-- [ ] **Step 2:** Confirmar mecanismo: `requireRole` bloqueia `!ativo` → 401 em toda chamada; logo admin inativo "não vê nada". Causa = **operacional**, não bug.
-- [ ] **Step 3:** Reativar o admin de teste (ou orientar): `UPDATE ... SET ativo=true` (via tela de Usuários pelo super, na Fase 3). Registrar no PROGRESSO.
+### Task 2.1: Reproduzir + corrigir (operacional)
+- [ ] Step 1: `SELECT papel,aprovado,ativo FROM "User" WHERE papel IN ('ADMIN','SUPER_ADMIN')` (admin de teste `ativo=false`). Step 2: confirmar que `requireRole` 401 conta inativa (causa operacional, não bug). Step 3: reativar via tela de Usuários (super, Fase 3) ou `UPDATE`; registrar no PROGRESSO. Sem commit de código (é operacional) — documentar no STATUS.
 
-### Task 2.2: `linksPorPapel` trata `ativo=false`
-**Files:** Modify `apps/web/src/components/TopBar.jsx`; Test.
-- [ ] **Step 1:** Teste: `linksPorPapel({papel:'ADMIN',ativo:false})` → `[]` (ou aviso), não os links de admin.
-- [ ] **Step 2:** FAIL. **Step 3:** No topo de `linksPorPapel`, `if (usuario?.ativo===false) return []`. **Step 4:** PASS. **Step 5:** Commit `fix(web): conta inativa nao mostra navegacao`.
-
-> **Checkpoint Fase 2:** commit; deployável.
+> **CHECKPOINT Fase 2:** diagnóstico registrado; sem regressão.
 
 ---
 
-## FASE 3 — Shell Admin + Usuários + Aprovações do líder (juntas, deployável)
+## FASE 3 — Shell Admin + Usuários + Aprovações (telas ANTES dos redirects, P1)
 
-### Task 3.1: Rota `/app/aprovacoes` do líder (F1) — ANTES dos redirects
-**Files:** Create `apps/web/src/pages/Aprovacoes.jsx`; Modify `App.jsx`, `TopBar.jsx`.
-**Interfaces:** `Aprovacoes` usa `apiUsuariosPendentes()` (já escopa por célula no backend), renderiza cards com `StatusBadge`, Aprovar/Recusar (Recusar via `ConfirmDialog`), Toast.
-- [ ] **Step 1:** Adicionar rota `<Route path="/app/aprovacoes" element={<SoLider><Aprovacoes/></SoLider>} />`.
-- [ ] **Step 2:** `linksPorPapel`: link "Aprovações" do líder → `/app/aprovacoes` (não `/app/usuarios`).
-- [ ] **Step 3:** Implementar `Aprovacoes.jsx` (reusa lógica de aprovar/recusar do `Usuarios.jsx` atual, só a parte Pendentes).
-- [ ] **Step 4:** Verificar no browser (logar como líder) que Aprovações aparece e funciona.
-- [ ] **Step 5:** Commit `feat(web): rota /app/aprovacoes dedicada ao lider`.
+### Task 3.1: Rota `/app/aprovacoes` do líder (F1) — Create `pages/Aprovacoes.jsx`; Modify `App.jsx`, `TopBar.jsx`
+- [ ] Step 1: rota `<Route path="/app/aprovacoes" element={<SoLider><Aprovacoes/></SoLider>}/>`. Step 2: link "Aprovações" do líder → `/app/aprovacoes`. Step 3: `Aprovacoes` (só Pendentes; `apiUsuariosPendentes`; Aprovar/Recusar via `ConfirmDialog`; Toast; Skeleton/EmptyState). Step 4: browser (líder). Step 5: Commit.
 
-### Task 3.2: `AdminLayout` + route-group + ContextSwitcher + redirects
-**Files:** Create `pages/admin/AdminLayout.jsx`; Modify `App.jsx`, `TopBar.jsx`.
-- [ ] **Step 1:** `AdminLayout`: rail lateral (`lg+`) / abas topo (`<lg`) com Usuários·Células·Avisos; `<Outlet/>`; `max-w-6xl`.
-- [ ] **Step 2:** `App.jsx`: adicionar grupo `<Route element={<SoAdmin><AdminLayout/></SoAdmin>}>` com `/app/admin/usuarios|celulas|avisos`; redirects `/app/usuarios`→`/app/admin/usuarios`, `/app/celulas`→`/app/admin/celulas` (via `<Navigate>`).
-- [ ] **Step 3:** `TopBar`: montar `ContextSwitcher` (derivado do papel atual; storage por `usuario.id`); mover a montagem de links para os dois contextos.
-- [ ] **Step 4:** Verificar navegação por papel (super/admin/líder/membro) no browser; sem loop de redirect.
-- [ ] **Step 5:** Commit `feat(web): shell de administracao (route-group + ContextSwitcher)`.
+### Task 3.2: `AdminLayout` + route-group `/app/admin/*` (telas reais, sem redirects ainda)
+**Files:** Create `pages/admin/AdminLayout.jsx`, `pages/admin/AdminAvisos.jsx`; Modify `App.jsx`.
+- [ ] Step 1: `AdminLayout` (rail lateral `lg+`/abas `<lg`: Usuários·Células·Avisos; `<Outlet/>`; `max-w-6xl`). Step 2: grupo `<Route element={<SoAdmin><AdminLayout/></SoAdmin>}>` com `/app/admin/celulas` (→`Celulas` existente), `/app/admin/avisos` (→`AdminAvisos` novo). **Ainda não** mexer em `/app/usuarios`/`/app/celulas` antigos. Step 3: `AdminAvisos` (reusa `apiBannerAdmin/apiSalvarBanner`; textarea+Checkbox+Salvar+Toast+preview). Step 4: browser. Step 5: Commit.
 
-### Task 3.3: `AdminUsuarios` reformada (abas, linha de dados, chips, RoleSelect, busca, massa)
-**Files:** Create `pages/admin/AdminUsuarios.jsx`; remove uso antigo em `Usuarios.jsx` (avisos saem daqui). **Frontend: usar `ui-ux-pro-max`.**
-- [ ] **Step 1:** Legenda dos níveis em popover "?"; `Tabs` Pendentes/Todos.
-- [ ] **Step 2:** Pendentes: cards + seleção múltipla + "Aprovar selecionados"; Recusar via ConfirmDialog + Toast.
-- [ ] **Step 3:** Todos: **linha de dados** (`md+` grid, `divide-y`, `hover:bg-surface`, `h-14`; card no mobile); busca via Combobox; `StatusBadge`; `RoleSelect` (opções filtradas por `podeEditarPapel(eu, alvo, novo)`); Ativar/Desativar com bloqueios (si, super, admin quando editor≠super) — botão oculto quando 403aria.
-- [ ] **Step 4:** Skeleton no load; EmptyState/erro. Verificar no browser (super e admin).
-- [ ] **Step 5:** Commit `feat(web): tela de Usuarios reformada (abas, linha de dados, RoleSelect)`.
+### Task 3.3: `ContextSwitcher` + badge de pendências (M1) — Modify `TopBar.jsx`
+- [ ] Step 1: montar `ContextSwitcher` (derivado do papel atual; storage por `usuario.id`; `limparContexto` no logout). Step 2: contagem de pendentes (`apiUsuariosPendentes().length`) alimenta: badge no segmento Administração, item "Usuários" e **Sino** (`NotificacoesSino`). Step 3: links dos dois contextos. Step 4: browser (super/admin/líder/membro). Step 5: Commit.
 
-### Task 3.4: `Avisos` como destino próprio
-**Files:** Create `pages/admin/AdminAvisos.jsx` (reusa `apiBannerAdmin/apiSalvarBanner`); remover bloco de aviso de onde estava.
-- [ ] Steps 1–5: card com textarea+Checkbox "Exibir para todos"+Salvar(Toast)+preview; rota `/app/admin/avisos`; commit `feat(web): avisos em destino proprio`.
+### Task 3.4a: `AdminUsuarios` — aba Pendentes (P6) — Create `pages/admin/AdminUsuarios.jsx`
+**Frontend: `ui-ux-pro-max`.**
+- [ ] Step 1: legenda dos níveis em `Popover` "?"; `Tabs` Pendentes/Todos (Todos placeholder por ora). Step 2: Pendentes — cards + **seleção múltipla** + "Aprovar selecionados" (**loop client-side** com erro parcial + Toast agregado, M2); Recusar via `ConfirmDialog` "irreversível". Step 3: Skeleton/EmptyState. Step 4: rota `/app/admin/usuarios` → `AdminUsuarios`. Step 5: browser + Commit.
 
-> **Checkpoint Fase 3:** líder tem Aprovações; admin vê Usuários (abas/linha); avisos separados; switcher ok; `npm test` verde; deployável.
+### Task 3.4b: `AdminUsuarios` — aba Todos (linha de dados, RoleSelect, gating)
+- [ ] Step 1: **linha de dados** (`md+` grid `Avatar+Nome·Email·StatusBadge·RoleSelect·Ação`, `divide-y`, `hover:bg-surface`, `h-14`; card no mobile). Step 2: busca via `Combobox`(allowCustom/query); `RoleSelect` com `opcoes=opcoesDePapel(eu.papel, u.papel)`; Ativar/Desativar via `podeAgirSobre` (oculto quando não pode). Step 3: teste de componente cobrindo ocultação de ação e opções por papel (usa 0.2). Step 4: browser. Step 5: Commit.
+
+### Task 3.5: Ativar redirects (ÚLTIMA task, P1/A4) — Modify `App.jsx`, `TopBar.jsx`
+- [ ] Step 1: `InicioOuCelulas`: admin sem célula → `/app/admin/usuarios` (não `/app/celulas`). Step 2: trocar `to:` dos links admin em `linksPorPapel` para `/app/admin/*`. Step 3: redirects `/app/usuarios`→`/app/admin/usuarios`, `/app/celulas`→`/app/admin/celulas` (`<Navigate replace>`); remover rota `/app/usuarios` antiga (SoGestor/Usuarios). Step 4: browser (todos os papéis; sem duplo-redirect/loop/órfão). Step 5: Commit.
+- [ ] **CHECKPOINT (P9):** navegação por papel ok; líder tem Aprovações; nenhuma rota órfã.
+
+> **CHECKPOINT Fase 3:** `npm test` verde; deployável.
 
 ---
 
-## FASE 4 — Células (schema + form multi-step + fix bug)
+## FASE 4 — Células (front primeiro, depois refine — P8)
 
-### Task 4.1: Migration `cep` + schema coerção + refine coerência (F3, F9)
-**Files:** Modify `apps/api/prisma/schema.prisma`, `src/routes/celulas.js`; Create migration; Test `celulas.test.js`.
-- [ ] **Step 1:** Teste: POST com `diaSemana:"3"` (string) → 201 (coage); POST com `diaSemana` incoerente com weekday(data) → 400 "dia incompatível"; PUT parcial (só nome) numa célula legada incoerente → 200 (refine não aplica no update).
-- [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** `schema.prisma`: `cep String?` em Celula. Gerar migration (`npx prisma migrate dev --name cep`). `celulaSchema`: `diaSemana: z.coerce.number().int().min(0).max(6)`, `frequenciaDias: z.coerce.number()...`, `cep: z.string().regex(/^\d{5}-?\d{3}$/).optional()`, e `.refine(d => d.diaSemana===new Date(d.dataPrimeiroEncontro).getUTCDay(), {message:'Dia da semana incompatível com a data do primeiro encontro'})` **só no create schema**.
-- [ ] **Step 4:** PASS (+ existentes). **Step 5:** Commit `feat(api): cep + coercao numerica + coerencia dia/data na criacao de celula`.
-- [ ] **Step 6:** `agente schema-changed` (avisa outras worktrees — aqui só main; mesmo assim registrar).
+### Task 4.1: `montarPayloadCelula` puro + front multi-step (P5) — Modify `Celulas.jsx`, `lib/api.js`; Create `lib/celulaPayload.js`+test. **`ui-ux-pro-max`.**
+- [ ] Step 1: teste `montarPayloadCelula(form)` → `diaSemana:Number`, `frequenciaDias:Number`, `dataPrimeiroEncontro:'YYYY-MM-DDTHH:mm'` (**não** `toISOString`; caso 21:00 não vira dia seguinte), `cep`, `numero`. Step 2: FAIL. Step 3: implementar puro. Step 4: PASS. Step 5: usar no `Celulas.jsx`; `Modal` multi-step (Identificação→Encontro→Endereço, progresso, placeholders, "Data e horário…"); CEP `mascaraCep`+autofill ViaCEP (`AbortController`+timeout 4s+debounce)→**Cidade Combobox**(allowCustom)/Bairro/Rua/Número+`Checkbox "Sem número"`(→`S/N`). Step 6: browser + Commit.
 
-### Task 4.2: Front — form de célula multi-step (P4) + `Number()` + CEP autofill
-**Files:** Modify `apps/web/src/pages/Celulas.jsx`, `lib/api.js`. **Usar `ui-ux-pro-max`.**
-- [ ] **Step 1:** Enviar `diaSemana`/`frequenciaDias` como `Number(...)`; `dataPrimeiroEncontro` como wall-clock ingênuo (não `toISOString()`).
-- [ ] **Step 2:** `Modal` multi-step (Identificação→Encontro→Endereço) com barra de progresso; placeholders; "Data e horário do primeiro encontro".
-- [ ] **Step 3:** Endereço: CEP `mascaraCep` + autofill ViaCEP (`fetch` com `AbortController`+timeout 4s+debounce) preenchendo cidade/bairro/rua; **Cidade via Combobox** (`allowCustom`); Número + `Checkbox "Sem número"` (→ `numero='S/N'`, desabilita campo).
-- [ ] **Step 4:** Verificar criação no browser (repro do bug → agora cria); Toast de sucesso; Skeleton/EmptyState na lista.
-- [ ] **Step 5:** Commit `feat(web): cadastro de celula multi-step (CEP/cidade/sem numero) + fix criacao`.
+### Task 4.2: Backend schema — coerção + `cep` + refine coerência (A2, M3, F9) — Modify `schema.prisma`, `routes/celulas.js`; Create migration; Test
+- [ ] Step 1: testes — POST `diaSemana:"3"`→201; POST dia incoerente c/ data→400; **POST quarta 21:00 (BRT) → 201 (sem falso-positivo de fuso)**; PUT parcial (só nome) em célula legada incoerente→200; PUT com `cep`→aceita.
+- [ ] Step 2: FAIL.
+- [ ] Step 3: `schema.prisma` `cep String?`; `npx prisma migrate dev --name cep` (**DB local**; commitar só `migration.sql`). `enderecoFields` compartilhado ganha `cep: z.string().regex(/^\d{5}-?\d{3}$/).optional()` (cobre create+update, M3). `diaSemana/frequenciaDias`→`z.coerce.number()`. `.refine` **só no create schema**, TZ-independente: extrair `[y,mo,d]` de `dataPrimeiroEncontro` (string) e `weekday = new Date(Date.UTC(y,mo-1,d)).getUTCDay()`; exigir `diaSemana===weekday`.
+- [ ] Step 4: PASS + existentes. Step 5: Commit. (Sem `agente schema-changed` — modo main.)
+- [ ] **CHECKPOINT (P9):** migration aplicada; `prisma generate` no build; criar célula funciona (repro do bug → verde).
 
-### Task 4.3: Definir líder via Combobox
-**Files:** Modify `Celulas.jsx` (DefinirLider usa `Combobox` no lugar da busca ad-hoc).
-- [ ] Steps 1–5: substituir busca manual por `Combobox` (options = usuários); commit `refactor(web): definir lider via Combobox`.
+### Task 4.3: Definir líder via Combobox — Modify `Celulas.jsx`
+- [ ] Steps: substituir busca ad-hoc por `Combobox`; commit.
 
-> **Checkpoint Fase 4:** cria célula sem bug; `npm test` verde; deployável (cep aditivo, migrate no entrypoint).
+> **CHECKPOINT Fase 4:** cria célula sem bug; `npm test` verde; deployável.
 
 ---
 
-## FASE 5 — Perfil + /cadastro (estado civil, layout, máscara)
+## FASE 5 — Perfil + /cadastro
 
-### Task 5.1: Estado civil por checkbox (map-back seguro F7)
-**Files:** Modify `apps/web/src/pages/Perfil.jsx`, `components/ConjugeSecao.jsx`.
-- [ ] **Step 1:** Substituir `Select` de estado civil por `Checkbox "Sou casado(a)"`. Estado inicial marcado se `usuario.estadoCivil ∈ {CASADO,UNIAO_ESTAVEL}`.
-- [ ] **Step 2:** Map-back: enviar `estadoCivil` **só** se o checkbox mudou vs inicial — marcar→`'CASADO'`, desmarcar→`'SOLTEIRO'`; sem mudança, não incluir no payload.
-- [ ] **Step 3:** `ConjugeSecao` revelada quando marcado (animada); WhatsApp com `mascaraTelefone`.
-- [ ] **Step 4:** Layout em seções (ícone-em-caixinha), não pilha; Toast ao salvar. Verificar no browser.
-- [ ] **Step 5:** Commit `feat(web): estado civil por checkbox + perfil reformulado`.
+### Task 5.1: `mapBackEstadoCivil` puro + Perfil (P3/M5, F7) — Create `lib/estadoCivil.js`+test; Modify `Perfil.jsx`, `ConjugeSecao.jsx`
+- [ ] Step 1: teste `mapBackEstadoCivil(inicialMarcado, marcadoAgora)`: (marcado,marcado)→`undefined`; (marcado,desmarcado)→`'SOLTEIRO'`; (desmarcado,marcado)→`'CASADO'`; e `ehCasadoInicial(estadoCivil)` = `∈{CASADO,UNIAO_ESTAVEL}`. Step 2: FAIL. Step 3: implementar puro. Step 4: PASS.
+- [ ] Step 5: `Perfil.jsx`: `Checkbox "Sou casado(a)"` (inicial via `ehCasadoInicial`); payload usa `mapBackEstadoCivil` (omite chave se `undefined`); `ConjugeSecao` revelada quando marcado (animada); WhatsApp `mascaraTelefone`; layout em seções (ícone-caixinha); Toast. Step 6: browser + Commit.
 
-### Task 5.2: `/cadastro` (signup) reformulado
-**Files:** Modify `apps/web/src/pages/Register.jsx`. **Usar `ui-ux-pro-max`.**
-- [ ] Steps 1–5: card centrado, hierarquia, placeholders, senha com toggle, cromado sutil no CTA; commit `feat(web): tela de cadastro reformulada`.
+### Task 5.2: `/cadastro` reformulado — Modify `Register.jsx`. **`ui-ux-pro-max`.**
+- [ ] Steps: card centrado, hierarquia, placeholders, senha toggle, CTA cromado; commit.
 
-> **Checkpoint Fase 5:** `npm test` verde; deployável.
+> **CHECKPOINT Fase 5:** `npm test` verde; deployável.
 
 ---
 
-## FASE 6 — Onboarding & seleção de célula
+## FASE 6 — Onboarding & seleção
 
-### Task 6.1: `CelulaPicker` bonito sem foto/líder (P3, F8)
-**Files:** Create `apps/web/src/components/CelulaPicker.jsx`. **Usar `ui-ux-pro-max`.**
-**Interfaces:** `<CelulaPicker celulas selecionada onSelecionar />` (apresentacional, sempre tela).
-- [ ] **Step 1:** Card: header ícone-em-caixinha + monograma/cor derivada do **nome da célula** (`corDoNome`); `Avatar` de líder com cor determinística (um em destaque + `+N`); chip **"Líder a definir"** quando sem líder; metadados `Dia · Horário · Frequência` + bairro; anel brand no selecionado.
-- [ ] **Step 2–4:** Integrar em `SelecionarCelula.jsx` (substitui os cards atuais); verificar com o dado real (sem líder/foto) que fica bonito.
-- [ ] **Step 5:** Commit `feat(web): CelulaPicker sofisticado (sem depender de foto/lider)`.
+### Task 6.1: `CelulaPicker` bonito sem foto/líder (P3, F8) — Create `components/CelulaPicker.jsx`; Modify `SelecionarCelula.jsx`. **`ui-ux-pro-max`.**
+- [ ] Steps: card header ícone-caixinha + monograma/cor do **nome da célula** (`corDoNome`); `Avatar` líder cor determinística (destaque + `+N`); chip **"Líder a definir"** sem líder; `Dia·Horário·Frequência`+bairro; anel brand selecionado. Integrar em `SelecionarCelula`; verificar com dado real (sem líder/foto). Commit.
 
-### Task 6.2: `Aguardando` com refresh
-**Files:** Modify `Aguardando.jsx`.
-- [ ] Steps 1–5: `StatusBadge "Em aprovação"` + nome da célula + botão "Atualizar status" (`apiMe`→`aplicarUsuario`) + "Completar perfil"; commit.
+### Task 6.2: `Aguardando` refresh — Modify `Aguardando.jsx`
+- [ ] Steps: `StatusBadge "Em aprovação"`+nome célula+"Atualizar status"(`apiMe`→`aplicarUsuario`)+"Completar perfil". Commit.
 
-> **Checkpoint Fase 6:** fluxo cadastro→seleção→aguardando bonito; deployável.
+> **CHECKPOINT Fase 6:** fluxo bonito; deployável.
 
 ---
 
 ## FASE 7 — QR (ramo "com conta")
 
-### Task 7.1: Ramo "com conta" + mensagens
-**Files:** Modify `apps/web/src/pages/QrLanding.jsx`, `Login.jsx` (best-effort já existe); confirmar `apiCheckinQr` cobre logado.
-- [ ] **Step 1:** Garantir que usuário logado/que faz login ao ler QR chama `apiCheckinQr` e vê Toast/tela "Presença registrada" ou "Não há reunião hoje"/"Disponível a partir do horário" (mensagens do backend).
-- [ ] **Step 2–4:** Verificar no browser os dois ramos (sem conta / com conta). **Não** tocar no check-in do backend.
-- [ ] **Step 5:** Commit `feat(web): QR com conta existente registra presenca e confirma`.
+### Task 7.1: ramo "com conta" + mensagens — Modify `QrLanding.jsx`, `Login.jsx`
+- [ ] Steps: usuário logado/que loga ao ler QR chama `apiCheckinQr` e vê Toast/tela "Presença registrada"/"Não há reunião hoje"/"Disponível a partir do horário". **Não** tocar no check-in backend. Verificar 2 ramos no browser. Commit.
 
-> **Checkpoint Fase 7:** deployável.
+> **CHECKPOINT Fase 7:** deployável.
 
 ---
 
 ## FASE 8 — Polimento, migração de crus & design system
 
-### Task 8.1: Migrar `<select>/<input>/<textarea>` crus → primitivos
-**Files:** `CronogramaForm` (em `CelulaDetalhe.jsx`), `Calendario`, `Pedidos`, `Testemunhos`, filtros. **Usar `ui-ux-pro-max`.**
-- [ ] Steps: substituir cada uso cru por `Select`/`Combobox`/`Input`/`Checkbox`; unificar aparência de `Select`+`Combobox`; commit por arquivo.
+### Task 8.1: Migrar `<select>/<input>/<textarea>` crus → primitivos (P10 spec) — `CronogramaForm` (CelulaDetalhe), Calendário, Pedidos, Testemunhos, filtros. Unificar aparência Select/Combobox. Commit por arquivo. **`ui-ux-pro-max`.**
+### Task 8.2: Passe UI/UX + cromado + responsividade — checklist `ui-ux-pro-max` (a11y/contraste/foco/reduced-motion/375–1440); dark/light.
+### Task 8.3: E2E manual + verdes — `npm test` (api+web) verde; `tsc`/lint; E2E de TODOS os fluxos contra `localhost:3200`.
+### Task 8.4: Destilar `design-system/MASTER.md` da UI nova (corrige o obsoleto/laranja). Commit.
 
-### Task 8.2: Passe de UI/UX + cromado + responsividade
-- [ ] Rodar checklist `ui-ux-pro-max` (a11y/contraste/foco/reduced-motion/375–1440); ajustar cromado nos destaques; verificar dark/light.
-
-### Task 8.3: E2E manual + verdes
-- [ ] `npm test` (api+web) verde; `tsc`/lint sem erros novos; E2E manual de TODOS os fluxos (login, cadastro sem QR→seleção→aprovação, QR com/sem conta, admin gerencia usuários/papéis/ativo, líder aprova, cria célula, perfil/estado civil, avisos) contra `localhost:3200`.
-
-### Task 8.4: Destilar `design-system/MASTER.md` da UI nova
-- [ ] Reescrever o MASTER (hoje obsoleto/laranja) refletindo a UI reformada: tokens prata cromado reais, primitivos, paleta semântica `-700/-400`, larguras, a11y. Commit `docs: design-system MASTER destilado da reforma`.
-
-> **Checkpoint Fase 8:** tudo verde, E2E ok, PR/mensagem final ao dono.
+> **CHECKPOINT Fase 8:** tudo verde, E2E ok, relatório final ao dono.
 
 ---
 
-## Self-Review (cobertura da spec)
-- Papéis/permissões (§4.1) → 1.1, 1.2, 3.3. Super admin (§4.1) → 1.3. Nav/contexto (§4.2) → 3.1–3.2, 2.2. Primitivos+a11y (§4.3) → 0.1–0.15. Cromado (§4.6) → 0.15, 8.2. Fluxos (§4.4) → 3.1, 6.1, 7.1. Backend células (§4.5) → 4.1. Estado civil (§4.5) → 5.1. Telas (§5) → 3.3–3.4, 4.2, 5.1–5.2, 6.1–6.2. Bug célula (§6) → 4.1–4.2. Faseamento/deploy (§7) → checkpoints. Critérios (§8) → cobertos por fase. Migração crus/design system (§7 F8/P10) → 8.1, 8.4.
-- Sem placeholders de código em passos de lógica (RBAC/máscara/hook/refine têm código). Componentes de UI: contrato + estrutura + classes-chave; detalhe fino inline com `ui-ux-pro-max` (metodologia).
+## Self-Review (cobertura)
+Papéis/permissões §4.1 → 1.1,1.2,0.2,3.4b. Super admin → 1.3. Nav/contexto §4.2 → 3.1–3.5. Primitivos+a11y §4.3 → 0.0–0.15. Cromado §4.6 → 0.0,8.2. Fluxos §4.4 → 3.1,6.1,7.1. Backend células §4.5 → 4.2. Estado civil → 5.1. Telas §5 → 3.4,4.1,5.x,6.x. Bug célula §6 → 4.1/4.2. Badge/Sino P8 → 3.3. Massa → 3.4a. Crus/design system → 8.1,8.4. Deploy → checkpoints + entrypoint (1.3). Sem placeholder de código em passos de lógica (RBAC/máscara/hook/refine/map-back/payload têm código ou função pura testada).
