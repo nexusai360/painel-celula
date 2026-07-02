@@ -28,7 +28,7 @@ export async function encontroRoutes(app) {
     const { id } = request.params
     const usuario = request.usuario
 
-    const celula = await prisma.celula.findUnique({ where: { id } })
+    const celula = await prisma.celula.findUnique({ where: { id }, include: { lideres: { select: { id: true } } } })
     if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
 
     // Scoping: ADMIN+ e líder da célula gerenciam (podeGerenciarCelula); membro só se for da célula.
@@ -75,7 +75,7 @@ export async function encontroRoutes(app) {
 
     const encontro = await prisma.encontro.findUnique({
       where: { id },
-      include: { celula: true }
+      include: { celula: { include: { lideres: { select: { id: true } } } } }
     })
     if (!encontro) return reply.code(404).send({ erro: 'Encontro não encontrado' })
 
@@ -106,7 +106,7 @@ export async function encontroRoutes(app) {
   app.post('/celulas/:id/encontros/estender', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
 
-    const celula = await prisma.celula.findUnique({ where: { id } })
+    const celula = await prisma.celula.findUnique({ where: { id }, include: { lideres: { select: { id: true } } } })
     if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
     if (!podeGerenciarCelula(request.usuario, celula)) {
       return reply.code(403).send({ erro: 'Sem permissão' })
@@ -143,7 +143,7 @@ export async function encontroRoutes(app) {
   app.post('/celulas/:id/encontros', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
 
-    const celula = await prisma.celula.findUnique({ where: { id } })
+    const celula = await prisma.celula.findUnique({ where: { id }, include: { lideres: { select: { id: true } } } })
     if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
     if (!podeGerenciarCelula(request.usuario, celula)) {
       return reply.code(403).send({ erro: 'Sem permissão' })

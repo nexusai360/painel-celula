@@ -24,6 +24,11 @@ enum Qualificacao {
   PASTOR
 }
 
+enum CelulaStatus {
+  PENDENTE
+  APROVADA
+}
+
 enum EstadoCivil {
   SOLTEIRO
   CASADO
@@ -78,7 +83,8 @@ model User {
   googleConectado       Boolean  @default(false)
   googleEventos         GoogleEventoSync[]
 
-  celulaLiderada Celula?         @relation("LiderDaCelula")
+  celulasLideradas Celula[]      @relation("LideresDaCelula")
+  celulasCriadas   Celula[]      @relation("CelulasCriadas")
   presencas      Presenca[]
   pedidos        PedidoOracao[]
   testemunhos    Testemunho[]
@@ -101,11 +107,13 @@ model Celula {
   frequenciaDias       Int      // ex: 7, 14
   dataPrimeiroEncontro DateTime
   ativa                Boolean  @default(true)
+  status               CelulaStatus @default(APROVADA)
   criadoEm             DateTime @default(now())
 
-  lider     User?   @relation("LiderDaCelula", fields: [liderId], references: [id])
-  liderId   String? @unique
+  criadaPor   User?   @relation("CelulasCriadas", fields: [criadaPorId], references: [id], onDelete: SetNull)
+  criadaPorId String?
 
+  lideres     User[]         @relation("LideresDaCelula")
   membros     User[]         @relation("MembrosDaCelula")
   encontros   Encontro[]
   pedidos     PedidoOracao[]

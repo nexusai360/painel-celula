@@ -2,17 +2,16 @@ import { ehAdmin } from './roles.js'
 
 /**
  * Verifica se o usuário pode gerenciar a célula.
- * Nível ADMIN+ (inclui SUPER_ADMIN): sempre; senão, só se for o líder da célula.
- * (Fase A: liderança 1:1 via `celula.liderId`; Fase B troca para a junção `lideres`.)
+ * Nível ADMIN+ (inclui SUPER_ADMIN): sempre; senão, só se estiver entre os líderes da célula.
+ * A célula deve vir com `lideres` carregado (array com `id`).
  *
  * @param {{ id: string, nivelAcesso: string }} usuario
- * @param {{ liderId: string|null }} celula
+ * @param {{ lideres?: Array<{ id: string }> }} celula
  * @returns {boolean}
  */
 export function podeGerenciarCelula(usuario, celula) {
   if (ehAdmin(usuario.nivelAcesso)) return true
-  if (celula.liderId === usuario.id) return true
-  return false
+  return Array.isArray(celula.lideres) && celula.lideres.some((l) => l.id === usuario.id)
 }
 
 /**

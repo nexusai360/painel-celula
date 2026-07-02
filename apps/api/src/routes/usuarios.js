@@ -1,15 +1,23 @@
 import { prisma } from '../prisma.js'
 import {
-  requireRole, requireGestor, ehAdmin, podeEditarNivel, podeEditarQualificacao,
+  requireRole, requireGestor, ehAdmin, podeEditarNivel, podeEditarQualificacao, qualificacaoMinima,
   TODOS_NIVEIS, TODAS_QUALIFICACOES,
 } from '../lib/roles.js'
 import { usuarioAdminUpdateSchema, normalizarWhatsapp } from '@icelula/shared'
 import { publico } from '../lib/usuarios.js'
 
-// ADMIN+ gerencia qualquer pendente; gestor (líder) só os da própria célula.
-function podeGerenciarPendente(usuario, alvo) {
+// IDs das células que o usuário lidera (junção N:N).
+async function celulasLideradasIds(userId) {
+  const cels = await prisma.celula.findMany({ where: { lideres: { some: { id: userId } } }, select: { id: true } })
+  return cels.map((c) => c.id)
+}
+
+// ADMIN+ gerencia qualquer pendente; líder só os das células que lidera.
+async function podeGerenciarPendente(usuario, alvo) {
   if (ehAdmin(usuario.nivelAcesso)) return true
-  return !!usuario.celulaId && alvo.celulaId === usuario.celulaId
+  if (!alvo.celulaId) return false
+  const ids = await celulasLideradasIds(usuario.id)
+  return ids.includes(alvo.celulaId)
 }
 
 export async function usuarioRoutes(app) {
@@ -45,7 +53,8 @@ export async function usuarioRoutes(app) {
   // Lista contas pendentes: ADMIN+ vê todas; LÍDER vê só as da própria célula.
   app.get('/usuarios/pendentes', { preHandler: requireGestor() }, async (request, reply) => {
     const admin = ehAdmin(request.usuario.nivelAcesso)
-    const where = { aprovado: false, ativo: true, ...(admin ? {} : { celulaId: request.usuario.celulaId }) }
+    const where = { aprovado: false, ativo: true }
+    if (!admin) where.celulaId = { in: await celulasLideradasIds(request.usuario.id) }
     const usuarios = await prisma.user.findMany({
       where,
       orderBy: { criadoEm: 'asc' },
@@ -60,7 +69,7 @@ export async function usuarioRoutes(app) {
     const { id } = request.params
     const alvo = await prisma.user.findUnique({ where: { id } })
     if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
-    if (!podeGerenciarPendente(request.usuario, alvo)) return reply.code(403).send({ erro: 'Sem permissão' })
+    if (!(await podeGerenciarPendente(request.usuario, alvo))) return reply.code(403).send({ erro: 'Sem permissão' })
 
     const qualificacao = request.body?.qualificacao || 'MEMBRO'
     if (!TODAS_QUALIFICACOES.includes(qualificacao)) return reply.code(400).send({ erro: 'Qualificação inválida' })
@@ -112,6 +121,21 @@ export async function usuarioRoutes(app) {
       return reply.code(403).send({ erro: 'Sem permissão para definir essa qualificação' })
     }
 
+    // Trava de rebaixamento: rebaixar um LÍDER/PASTOR para abaixo de LÍDER exige tratar os vínculos.
+    const rebaixandoLider = qualificacaoMinima(alvo.qualificacao, 'LIDER') && !qualificacaoMinima(nova, 'LIDER')
+    if (rebaixandoLider) {
+      const lideradas = await prisma.celula.findMany({ where: { lideres: { some: { id } } }, select: { id: true } })
+      if (lideradas.length > 1) {
+        return reply.code(409).send({ erro: 'Este líder atua em várias células. Remova-o das células antes de rebaixar.' })
+      }
+      if (lideradas.length === 1) {
+        // Lidera exatamente 1 → vira MEMBRO daquela célula (perde o vínculo de liderança).
+        const cId = lideradas[0].id
+        await prisma.celula.update({ where: { id: cId }, data: { lideres: { disconnect: { id } } } })
+        await prisma.user.update({ where: { id }, data: { celulaId: cId } })
+      }
+    }
+
     const user = await prisma.user.update({ where: { id }, data: { qualificacao: nova } })
     return reply.send({ usuario: publico(user) })
   })
@@ -122,7 +146,7 @@ export async function usuarioRoutes(app) {
     const alvo = await prisma.user.findUnique({ where: { id } })
     if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
     if (alvo.aprovado) return reply.code(400).send({ erro: 'Conta já aprovada; use desativar.' })
-    if (!podeGerenciarPendente(request.usuario, alvo)) return reply.code(403).send({ erro: 'Sem permissão' })
+    if (!(await podeGerenciarPendente(request.usuario, alvo))) return reply.code(403).send({ erro: 'Sem permissão' })
     // Reprovar = soft (fica REPROVADO, sem qualificação de gestão). Reativar depois volta a Membro.
     const user = await prisma.user.update({ where: { id }, data: { ativo: false, qualificacao: 'MEMBRO' } })
     return reply.send({ usuario: publico(user) })
@@ -161,8 +185,8 @@ export async function usuarioRoutes(app) {
     if (parsed.data.ativo !== undefined) {
       if (parsed.data.ativo === false) {
         if (id === request.usuario.id) return reply.code(400).send({ erro: 'Você não pode inativar a si mesmo' })
-        const lideranca = await prisma.celula.findFirst({ where: { liderId: id } })
-        if (lideranca) return reply.code(409).send({ erro: 'Defina outro líder antes de inativar este membro' })
+        const lideranca = await prisma.celula.findFirst({ where: { lideres: { some: { id } } } })
+        if (lideranca) return reply.code(409).send({ erro: 'Remova este líder das células antes de inativar' })
       }
       data.ativo = parsed.data.ativo
     }

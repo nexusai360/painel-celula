@@ -92,7 +92,7 @@ export async function presencaRoutes(app) {
 
     const encontro = await prisma.encontro.findUnique({
       where: { id },
-      include: { celula: true }
+      include: { celula: { include: { lideres: { select: { id: true } } } } }
     })
     if (!encontro) return reply.code(404).send({ erro: 'Encontro não encontrado' })
 
@@ -117,7 +117,7 @@ export async function presencaRoutes(app) {
   app.get('/celulas/:id/frequencia', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
 
-    const celula = await prisma.celula.findUnique({ where: { id } })
+    const celula = await prisma.celula.findUnique({ where: { id }, include: { lideres: { select: { id: true } } } })
     if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
 
     if (!podeGerenciarCelula(request.usuario, celula)) {

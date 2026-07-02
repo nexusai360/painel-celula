@@ -6,10 +6,6 @@ import { podeGerenciarCelula, gerarQrToken } from '../lib/escopo.js'
 import { publicoLeve } from '../lib/usuarios.js'
 import { sincronizarMembro } from '../lib/sync/calendarSync.js'
 
-/**
- * Retorna true se o erro Prisma P2002 foi causado pelo campo especificado.
- * Funciona com meta.target como array (Prisma 6+) ou string (nome da constraint).
- */
 function isP2002OnField(err, fieldName) {
   if (err?.code !== 'P2002') return false
   const target = err.meta?.target
@@ -17,7 +13,6 @@ function isP2002OnField(err, fieldName) {
   return String(target ?? '').includes(fieldName)
 }
 
-// Frequências suportadas: Semanal (7), Quinzenal (14), Mensal (28).
 const FREQUENCIAS_VALIDAS = [7, 14, 28]
 const frequenciaValida = z
   .coerce.number()
@@ -35,8 +30,6 @@ const enderecoFields = {
 }
 const CAMPOS_ENDERECO = Object.keys(enderecoFields)
 
-// Wall-clock ingênuo "YYYY-MM-DDTHH:mm" — weekday derivado dos componentes em UTC
-// (TZ-independente; consistente com a data armazenada, também UTC-pinada no handler).
 const DATA_HORA = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
 function weekdayDaString(s) {
   const [y, mo, d] = s.slice(0, 10).split('-').map(Number)
@@ -48,14 +41,12 @@ export function dataUtcDaString(s) {
   return new Date(Date.UTC(y, mo - 1, d, hh, mi))
 }
 
-// O dia da semana é SEMPRE derivado da data no handler — nunca validado/rejeitado.
 const celulaSchema = z.object({
   nome: z.string().min(1),
   descricao: z.string().optional(),
   diaSemana: z.coerce.number().int().min(0).max(6).optional(),
   frequenciaDias: frequenciaValida,
   dataPrimeiroEncontro: z.string().regex(DATA_HORA, 'Data/hora inválida'),
-  liderId: z.string().optional(),
   ...enderecoFields
 })
 
@@ -69,123 +60,120 @@ const updateCelulaSchema = z.object({
   ...enderecoFields
 })
 
+// Seleção dos líderes (nome + foto) para exibição.
+const LIDERES_SELECT = { select: { id: true, nome: true, email: true, avatar: true } }
+
 export async function celulaRoutes(app) {
-  // ── Endpoint público (landing QR Code) ─────────────────────────────────────
+  // ── Público (landing QR Code) — só célula aprovada e ativa ──────────────────
   app.get('/public/celula/:qrToken', async (request, reply) => {
     const { qrToken } = request.params
     const celula = await prisma.celula.findUnique({
       where: { qrToken },
-      select: { nome: true, ativa: true }
+      select: { nome: true, ativa: true, status: true }
     })
-    if (!celula || !celula.ativa) {
+    if (!celula || !celula.ativa || celula.status !== 'APROVADA') {
       return reply.code(404).send({ erro: 'Célula não encontrada' })
     }
     return reply.send({ nome: celula.nome })
   })
 
-  // ── POST /celulas (ADMIN) ───────────────────────────────────────────────────
-  app.post('/celulas', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+  // ── POST /celulas — cria (ADMIN ou qualificação LÍDER/PASTOR) ───────────────
+  // Admin: aprovada na hora. Líder/Pastor: PENDENTE até um admin aprovar; o criador
+  // vira líder da célula que criou.
+  app.post('/celulas', { preHandler: requireGestor() }, async (request, reply) => {
     const parsed = celulaSchema.safeParse(request.body)
     if (!parsed.success) {
       return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
     }
-    const { nome, descricao, frequenciaDias, liderId } = parsed.data
-    // Dia da semana DERIVADO da data (nunca falha por mismatch) + data UTC-pinada.
+    const criador = request.usuario
+    const admin = ehAdmin(criador.nivelAcesso)
+    const { nome, descricao, frequenciaDias } = parsed.data
     const diaSemana = weekdayDaString(parsed.data.dataPrimeiroEncontro)
     const dataPrimeiroEncontro = dataUtcDaString(parsed.data.dataPrimeiroEncontro)
     const endereco = Object.fromEntries(
       CAMPOS_ENDERECO.filter((k) => parsed.data[k] !== undefined).map((k) => [k, parsed.data[k]])
     )
+    const status = admin ? 'APROVADA' : 'PENDENTE'
 
-    if (liderId) {
-      const lider = await prisma.user.findUnique({ where: { id: liderId } })
-      if (!lider) return reply.code(404).send({ erro: 'Líder não encontrado' })
-    }
-
-    // Gera qrToken único: slug do nome + sufixo incremental
     let qrToken
     let sufixo = 1
-    const MAX_SUFIXO = 50
-    while (sufixo <= MAX_SUFIXO) {
-      qrToken = gerarQrToken(nome, String(sufixo))
-      const existing = await prisma.celula.findUnique({ where: { qrToken } })
-      if (!existing) break
-      sufixo++
-    }
-
-    // Fix 1: cria célula e promoção de líder em transação única.
-    // Em P2002: distingue colisão de liderId (409 imediato) de qrToken (retry com novo sufixo).
+    const MAX = 50
     let celula
-    const MAX_TENTATIVAS = 5
-    for (let tentativa = 0; tentativa < MAX_TENTATIVAS; tentativa++) {
+    for (let tentativa = 0; tentativa < MAX; tentativa++) {
+      qrToken = gerarQrToken(nome, String(sufixo))
       try {
-        celula = await prisma.$transaction(async (tx) => {
-          const c = await tx.celula.create({
-            data: { nome, descricao, diaSemana, frequenciaDias, dataPrimeiroEncontro, qrToken, liderId, ...endereco }
-          })
-          if (liderId) {
-            await tx.user.update({
-              where: { id: liderId },
-              data: { qualificacao: 'LIDER', celulaId: c.id }
-            })
+        celula = await prisma.celula.create({
+          data: {
+            nome, descricao, diaSemana, frequenciaDias, dataPrimeiroEncontro, qrToken, status,
+            criadaPorId: criador.id, ...endereco,
+            // Criador não-admin (líder/pastor) vira líder da célula criada.
+            ...(admin ? {} : { lideres: { connect: { id: criador.id } } })
           }
-          return c
         })
         break
       } catch (err) {
-        if (isP2002OnField(err, 'liderId')) {
-          return reply.code(409).send({ erro: 'Usuário já lidera outra célula' })
-        } else if (isP2002OnField(err, 'qrToken') && tentativa < MAX_TENTATIVAS - 1) {
-          sufixo++
-          qrToken = gerarQrToken(nome, String(sufixo))
-        } else if (err?.code === 'P2002') {
-          return reply.code(409).send({ erro: 'Não foi possível gerar um identificador único para a célula' })
-        } else {
-          throw err
-        }
+        if (isP2002OnField(err, 'qrToken') && tentativa < MAX - 1) { sufixo++; continue }
+        if (err?.code === 'P2002') return reply.code(409).send({ erro: 'Não foi possível gerar um identificador único' })
+        throw err
       }
     }
 
-    // materializarEncontros fica fora da transação (é idempotente)
     await materializarEncontros(celula.id)
-
-    return reply.code(201).send({ celula })
+    return reply.code(201).send({ celula, pendente: status === 'PENDENTE' })
   })
 
-  // ── GET /celulas (LIDER+) ───────────────────────────────────────────────────
+  // ── GET /celulas — admin vê aprovadas; líder vê as que lidera (incl. pendentes)
   app.get('/celulas', { preHandler: requireGestor() }, async (request, reply) => {
     const usuario = request.usuario
-    const where = ehAdmin(usuario.nivelAcesso) ? {} : { liderId: usuario.id }
+    const where = ehAdmin(usuario.nivelAcesso)
+      ? { status: 'APROVADA' }
+      : { lideres: { some: { id: usuario.id } } }
     const celulas = await prisma.celula.findMany({
       where,
       orderBy: { nome: 'asc' },
       include: {
         _count: { select: { membros: true, encontros: true } },
-        lider: { select: { id: true, nome: true, email: true } }
+        lideres: LIDERES_SELECT
       }
     })
     return reply.send({ celulas })
   })
 
-  // ── GET /celulas/publicas (seleção no onboarding — permite pendente) ─────────
-  // Só expõe o essencial para escolher: bairro, dia, horário, frequência e os
-  // líderes (nome + foto). Nunca o endereço completo.
+  // ── GET /celulas/pendentes (ADMIN) — fila de aprovação de células ───────────
+  app.get('/celulas/pendentes', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+    const celulas = await prisma.celula.findMany({
+      where: { status: 'PENDENTE' },
+      orderBy: { criadoEm: 'asc' },
+      include: {
+        _count: { select: { membros: true } },
+        lideres: LIDERES_SELECT,
+        criadaPor: { select: { id: true, nome: true, email: true } }
+      }
+    })
+    return reply.send({ celulas })
+  })
+
+  // ── POST /celulas/:id/aprovar (ADMIN) ───────────────────────────────────────
+  app.post('/celulas/:id/aprovar', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+    const { id } = request.params
+    const celula = await prisma.celula.findUnique({ where: { id } })
+    if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
+    const atualizada = await prisma.celula.update({ where: { id }, data: { status: 'APROVADA' } })
+    return reply.send({ celula: atualizada })
+  })
+
+  // ── GET /celulas/publicas (onboarding) — só aprovadas e ativas ──────────────
   app.get('/celulas/publicas', { preHandler: requireRole('USUARIO', { permitirPendente: true }) }, async (request, reply) => {
     const celulas = await prisma.celula.findMany({
-      where: { ativa: true },
+      where: { ativa: true, status: 'APROVADA' },
       orderBy: { nome: 'asc' },
       select: {
         id: true, nome: true, bairro: true, diaSemana: true,
         frequenciaDias: true, dataPrimeiroEncontro: true,
-        lider: { select: { nome: true, avatar: true } }
+        lideres: { select: { nome: true, avatar: true } }
       }
     })
-    const lista = celulas.map((c) => ({
-      id: c.id, nome: c.nome, bairro: c.bairro, diaSemana: c.diaSemana,
-      frequenciaDias: c.frequenciaDias, dataPrimeiroEncontro: c.dataPrimeiroEncontro,
-      lideres: c.lider ? [c.lider] : []
-    }))
-    return reply.send({ celulas: lista })
+    return reply.send({ celulas })
   })
 
   // ── GET /celulas/:id (escopo) ───────────────────────────────────────────────
@@ -193,22 +181,19 @@ export async function celulaRoutes(app) {
     const { id } = request.params
     const celula = await prisma.celula.findUnique({
       where: { id },
-      include: {
-        lider: true,
-        _count: { select: { membros: true, encontros: true } }
-      }
+      include: { lideres: LIDERES_SELECT, _count: { select: { membros: true, encontros: true } } }
     })
     if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
     if (!podeGerenciarCelula(request.usuario, celula)) {
       return reply.code(403).send({ erro: 'Sem permissão' })
     }
-    return reply.send({ celula: { ...celula, lider: publicoLeve(celula.lider) } })
+    return reply.send({ celula })
   })
 
   // ── GET /celulas/:id/membros (escopo) ───────────────────────────────────────
   app.get('/celulas/:id/membros', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
-    const celula = await prisma.celula.findUnique({ where: { id } })
+    const celula = await prisma.celula.findUnique({ where: { id }, include: { lideres: { select: { id: true } } } })
     if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
     if (!podeGerenciarCelula(request.usuario, celula)) {
       return reply.code(403).send({ erro: 'Sem permissão' })
@@ -225,7 +210,7 @@ export async function celulaRoutes(app) {
   // ── PUT /celulas/:id (escopo) ───────────────────────────────────────────────
   app.put('/celulas/:id', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
-    const celula = await prisma.celula.findUnique({ where: { id } })
+    const celula = await prisma.celula.findUnique({ where: { id }, include: { lideres: { select: { id: true } } } })
     if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
     if (!podeGerenciarCelula(request.usuario, celula)) {
       return reply.code(403).send({ erro: 'Sem permissão' })
@@ -237,108 +222,73 @@ export async function celulaRoutes(app) {
     }
 
     const data = parsed.data
-    const mudouFrequencia =
-      data.frequenciaDias !== undefined && data.frequenciaDias !== celula.frequenciaDias
-    const mudouDataPrimeiro =
-      data.dataPrimeiroEncontro !== undefined &&
+    const mudouFrequencia = data.frequenciaDias !== undefined && data.frequenciaDias !== celula.frequenciaDias
+    const mudouDataPrimeiro = data.dataPrimeiroEncontro !== undefined &&
       new Date(data.dataPrimeiroEncontro).getTime() !== new Date(celula.dataPrimeiroEncontro).getTime()
 
     await prisma.celula.update({ where: { id }, data })
 
     if (mudouFrequencia || mudouDataPrimeiro) {
-      // Apaga encontros futuros AGENDADO sem nenhuma presença registrada
       const agora = new Date()
       const encontrosFuturos = await prisma.encontro.findMany({
         where: { celulaId: id, status: 'AGENDADO', data: { gt: agora } },
         include: { _count: { select: { presencas: true } } }
       })
-      const semPresenca = encontrosFuturos
-        .filter((e) => e._count.presencas === 0)
-        .map((e) => e.id)
+      const semPresenca = encontrosFuturos.filter((e) => e._count.presencas === 0).map((e) => e.id)
       if (semPresenca.length > 0) {
         await prisma.encontro.deleteMany({ where: { id: { in: semPresenca } } })
       }
       await materializarEncontros(id)
 
-      // Re-sync membros vinculados ao Google (idempotente). Bloco best-effort: nunca quebra a rota.
       try {
         const membrosVinculados = await prisma.user.findMany({
-          where: {
-            celulaId: id,
-            googleConectado: true,
-            googleCalendarId: { not: null },
-            googleRefreshTokenEnc: { not: null }
-          },
+          where: { celulaId: id, googleConectado: true, googleCalendarId: { not: null }, googleRefreshTokenEnc: { not: null } },
           select: { id: true }
         })
-        for (const m of membrosVinculados) {
-          try { await sincronizarMembro(m.id) } catch {}
-        }
+        for (const m of membrosVinculados) { try { await sincronizarMembro(m.id) } catch {} }
       } catch {}
     }
 
-    const atualizada = await prisma.celula.findUnique({ where: { id } })
+    const atualizada = await prisma.celula.findUnique({ where: { id }, include: { lideres: LIDERES_SELECT } })
     return reply.send({ celula: atualizada })
   })
 
-  // ── POST /celulas/:id/lider (ADMIN) ────────────────────────────────────────
-  app.post('/celulas/:id/lider', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+  // ── POST /celulas/:id/lideres — adiciona líder (ADMIN ou líder da célula) ────
+  app.post('/celulas/:id/lideres', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
-    const celula = await prisma.celula.findUnique({ where: { id } })
-    if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
-
     const parsed = z.object({ userId: z.string() }).safeParse(request.body)
-    if (!parsed.success) {
-      return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
-    }
+    if (!parsed.success) return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
     const { userId } = parsed.data
 
-    const novoLider = await prisma.user.findUnique({ where: { id: userId } })
-    if (!novoLider) return reply.code(404).send({ erro: 'Usuário não encontrado' })
+    const celula = await prisma.celula.findUnique({ where: { id }, include: { lideres: { select: { id: true } } } })
+    if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
+    if (!podeGerenciarCelula(request.usuario, celula)) return reply.code(403).send({ erro: 'Sem permissão' })
 
-    // Determina se o novo líder já lidera outra célula (leitura antes da transação)
-    const celulaAnteriorId =
-      novoLider.celulaId && novoLider.celulaId !== id ? novoLider.celulaId : null
+    const alvo = await prisma.user.findUnique({ where: { id: userId } })
+    if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
 
-    let celulaAnterior = null
-    if (celulaAnteriorId) {
-      celulaAnterior = await prisma.celula.findUnique({ where: { id: celulaAnteriorId } })
-    }
-
-    // Todas as escritas em transação atômica
-    const atualizada = await prisma.$transaction(async (tx) => {
-      // Se o novo líder já lidera OUTRA célula, libera o liderId daquela célula
-      if (celulaAnterior && celulaAnterior.liderId === userId) {
-        await tx.celula.update({
-          where: { id: celulaAnteriorId },
-          data: { liderId: null }
-        })
-      }
-
-      // Rebaixa a QUALIFICAÇÃO do líder anterior a MEMBRO (se houver e for diferente).
-      // Um nível ADMIN+ nunca é mexido: `nivelAcesso: 'USUARIO'` restringe a usuários comuns.
-      if (celula.liderId && celula.liderId !== userId) {
-        await tx.user.updateMany({
-          where: { id: celula.liderId, nivelAcesso: 'USUARIO' },
-          data: { qualificacao: 'MEMBRO', celulaId: null }
-        })
-      }
-
-      // Promove o novo líder (qualificação LÍDER). Se já for nível ADMIN+, mantém e
-      // continua global (celulaId null) — o vínculo fica só em celula.liderId.
-      if (!ehAdmin(novoLider.nivelAcesso)) {
-        await tx.user.update({
-          where: { id: userId },
-          data: { qualificacao: 'LIDER', celulaId: id }
-        })
-      }
-
-      return tx.celula.update({
-        where: { id },
-        data: { liderId: userId }
-      })
+    // Entrar na junção exige qualificação ≥ LÍDER — promove se estiver abaixo (e não for admin).
+    const promove = !ehAdmin(alvo.nivelAcesso) && alvo.qualificacao !== 'PASTOR'
+    await prisma.celula.update({
+      where: { id },
+      data: { lideres: { connect: { id: userId } } }
     })
+    if (promove) {
+      await prisma.user.update({ where: { id: userId }, data: { qualificacao: 'LIDER' } })
+    }
+    const atualizada = await prisma.celula.findUnique({ where: { id }, include: { lideres: LIDERES_SELECT } })
+    return reply.send({ celula: atualizada })
+  })
 
+  // ── DELETE /celulas/:id/lideres/:userId — remove vínculo (não a qualificação)
+  app.delete('/celulas/:id/lideres/:userId', { preHandler: requireGestor() }, async (request, reply) => {
+    const { id, userId } = request.params
+    const celula = await prisma.celula.findUnique({ where: { id }, include: { lideres: { select: { id: true } } } })
+    if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
+    if (!podeGerenciarCelula(request.usuario, celula)) return reply.code(403).send({ erro: 'Sem permissão' })
+
+    await prisma.celula.update({ where: { id }, data: { lideres: { disconnect: { id: userId } } } })
+    const atualizada = await prisma.celula.findUnique({ where: { id }, include: { lideres: LIDERES_SELECT } })
     return reply.send({ celula: atualizada })
   })
 
@@ -347,19 +297,8 @@ export async function celulaRoutes(app) {
     const { id } = request.params
     const celula = await prisma.celula.findUnique({ where: { id } })
     if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
-
-    // Rebaixa o ex-líder para MEMBRO e remove a célula atomicamente.
-    // `celulaId: null` torna o handler autossuficiente (não depende só do SetNull do schema).
-    await prisma.$transaction(async (tx) => {
-      if (celula.liderId) {
-        // Nível ADMIN+ nunca é mexido (`nivelAcesso: 'USUARIO'`).
-        await tx.user.updateMany({
-          where: { id: celula.liderId, nivelAcesso: 'USUARIO' },
-          data: { qualificacao: 'MEMBRO', celulaId: null }
-        })
-      }
-      await tx.celula.delete({ where: { id } })
-    })
+    // A junção de líderes some por cascade; qualificações dos líderes são preservadas.
+    await prisma.celula.delete({ where: { id } })
     return reply.code(204).send()
   })
 }
