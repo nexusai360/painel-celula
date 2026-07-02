@@ -16,3 +16,8 @@
   - F5 QR (cadastro sem aprovação + check-in de presença).
   - F6a banner administrativo.
 - Falta: F6b notificações in-app; F7 separação de áreas. Ver STATUS.md.
+
+## 2026-07-02 (cont.) — Fases 6b e 7 concluídas
+- 6b: notificações in-app (sino + envio ADMIN global / LÍDER da célula).
+- 7: separação de áreas (nav agrupada; admin com célula vê área de participante).
+- Plataforma v2 completa (fases 0–7) LIVE e CI-verde.

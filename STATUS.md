@@ -18,11 +18,16 @@ build GHCR → Shepherd (ou `npm run deploy` pra forçar). Detalhes em `DEPLOY.m
 - **QR Code**: cadastro via QR = **sem aprovação** + vinculado; **check-in de presença** no encontro de hoje (dentro da janela).
 - **Banner do admin**: aviso no topo pra todos; editor inline pro admin.
 
-## FALTA (próxima sessão continua daqui)
-- **Fase 6b — Notificações in-app**: modelo `Notificacao {autorId, escopo GLOBAL|CELULA, celulaId?, titulo, corpo}` + leitura por usuário; sino/central no header; envio em massa (ADMIN global; LÍDER aos membros da própria célula).
-- **Fase 7 — Separação de áreas**: nav agrupada admin vs líder/participante; admin também poder ver a própria célula se tiver uma.
-- **Refinos anotados**: passar `qrToken` no link "Criar conta" do Login; armazenamento de **múltiplos líderes** por célula (hoje 1; a UI já lida com array).
-- **E-mail transacional** (confirmação/reset de senha): pendente — falta configurar SMTP.
+## Plataforma v2: TODAS as fases (0–7) CONCLUÍDAS e LIVE
+- +6b Notificações in-app (sino no header; envio ADMIN global / LÍDER da célula).
+- +7 Separação de áreas (nav agrupada Administração | Minha célula; admin com
+  célula também vê a área de participante).
+
+## Refinos/pendências (não bloqueiam nada)
+- Passar `qrToken` no link "Criar conta" do Login.
+- Armazenamento de **múltiplos líderes** por célula (hoje 1; a UI já lida com array).
+- **E-mail transacional** (confirmação/reset de senha): falta configurar SMTP.
+- Agrupar visualmente os links no NavDrawer (mobile) por seção (desktop já agrupa).
 - Dono avisou que virão **mais requisitos** em áudios futuros.
 
 ## Como retomar (checklist)
