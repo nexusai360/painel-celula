@@ -1,8 +1,26 @@
-# Spec (v4 — pós Review 1) — Papéis, liderança N:N e segmentação de avisos
+# Spec (v5 — FINAL) — Papéis, liderança N:N e segmentação de avisos
 
-> Status: **v4** — decisões do dono confirmadas + achados da **Review 1** incorporados.
-> Próximo passo: **Review 2 (adversarial, sobre esta v4)** → final → plano por fase → execução TDD.
+> Status: **v5 FINAL** — decisões do dono + **Review 1** + **Review 2** incorporadas. Pronta para o plano.
 > Trabalho direto na `main`, live em http://localhost:3200.
+>
+> **Verdade contra o dado real (banco docker, 2026-07-02):** `Banner=0`, `Notificacao=0`, células com
+> líder = `0`, usuários = só `1 SUPER_ADMIN`. **Não há histórico a migrar** → o backfill é trivial na
+> prática (o único user vira `SUPER_ADMIN`+`MEMBRO`); ainda assim as migrations levam `@default` e lógica
+> de backfill corretos, para robustez e para futuros ambientes com dados.
+
+## Resoluções da Review 2 (v4 → v5)
+- **Flags `Todos` levam `@default(false)`** e os `*Alvo[]` levam `@default([])` (senão o `ADD COLUMN NOT NULL`
+  quebra em linhas existentes). Backfill sobe para `true` onde couber.
+- **Criador de célula (líder/pastor) é inserido na junção `lideres`** ao criar (senão criaria célula que não
+  lidera). Admin cria sem se auto-vincular.
+- **`podeGerenciarPendente` (aprovar/recusar) na Fase B** passa a checar "célula do pendente ∈ células
+  lideradas OU ADMIN+" — não o `usuario.celulaId` (que é a célula de *membro* do líder).
+- **PUT × PATCH resolvido:** modal "editar usuário" chama `PUT /usuarios/:id` só para nome/whatsapp/ativo e
+  os `PATCH .../nivel` e `.../qualificacao` para os eixos (travas concentradas nos PATCH).
+- **`requireGestor` tem forma por fase:** Fase A = `ADMIN+ OU qualificação ≥ LIDER` (não há junção ainda);
+  Fase B mantém isso (a cláusula "∈ lideres" é redundante pela invariante junção⊆≥LIDER — belt-and-suspenders).
+- Backfill de notificações/leitura especificado (trivial: tabelas vazias). Testes de `requireGestor` e da
+  reconciliação da migração adicionados. Carrossel 0/1 banner definido. (13 rotas `requireRole('LIDER')`, não 11.)
 
 ## Resoluções da Review 1 (o que mudou da v3 → v4)
 - **Guard novo `requireGestor`** substitui os 11 `requireRole('LIDER')` órfãos (LÍDER deixa de ser nível). Ver
@@ -82,10 +100,14 @@ Criar enums+colunas novas → backfill → parar de usar coluna antiga. Backfill
 precisam de novo guard. Regras:
 - **Autenticado qualquer** (antigo `requireRole('MEMBRO')`) → `requireAuth` (só exige sessão válida;
   `USUARIO+`). Ex.: `GET /notificacoes`, `perfil`, `presenca` do próprio.
-- **Novo `requireGestor`** = **nível ADMIN+** **OU** **é líder de alguma célula** (∈ junção `lideres`) **OU**
-  qualificação ≥ LÍDER. Aplica o gate grosso; o **escopo fino** (esta célula específica) continua no
-  `podeGerenciarCelula`. Substitui `requireRole('LIDER')` em: `celulas.js:156,192,209,226`,
-  `usuarios.js:44,56,84`, `presenca.js:90,117`, `encontros.js:75,113,150`, `notificacoes.js:29`.
+- **Novo `requireGestor`** — gate grosso; o **escopo fino** (esta célula específica) continua no
+  `podeGerenciarCelula`. Forma por fase (M1 da Review 2):
+  - **Fase A** (não há junção ainda): `ADMIN+` **OU** `qualificação ≥ LÍDER`.
+  - **Fase B**: idem (a cláusula "∈ `lideres` de alguma célula" é redundante pela invariante junção⊆≥LIDER,
+    mantida só como belt-and-suspenders). Um LÍDER **sem** vínculo passa o gate grosso e é barrado no escopo
+    fino — correto.
+  - Substitui `requireRole('LIDER')` nas **13 rotas**: `celulas.js:156,192,209,226`, `usuarios.js:44,56,84`,
+    `presenca.js:90,117`, `encontros.js:75,113,150`, `notificacoes.js:29`.
 - **Enviar notificação** (`POST /notificacoes`) = `requireGestor` **e** revalidação: ADMIN+ livre; LÍDER/
   PASTOR travado às suas células (co-líder e abaixo → 403).
 - **`encontros.js`** (esquecido na v3): trocar `usuario.papel === 'LIDER'/'MEMBRO'` (`:35,39`) por
@@ -116,8 +138,10 @@ precisam de novo guard. Regras:
   **conjunto de células lideradas** (junção) — o líder N:N vê seções por cada célula que lidera. (Evita a
   dependência invertida apontada na Review 1.)
 - **QR / auto-cadastro:** entra `qualificacao=MEMBRO` automático; sem fluxo de solicitação na plataforma.
-- **Nova UI de "editar usuário"** (não existe hoje): modal em `AdminUsuarios.jsx` → "Todos", edita
-  qualificação (e nível quando permitido), nome/whatsapp/ativo, via `PUT /usuarios/:id` (estendido).
+- **Nova UI de "editar usuário"** (não existe hoje): modal em `AdminUsuarios.jsx` → "Todos". Superfícies de
+  API separadas (A3 da Review 2): `PUT /usuarios/:id` só para **nome/whatsapp/ativo**; **nível** e
+  **qualificação** pelos `PATCH .../nivel` e `.../qualificacao` (travas concentradas neles). O modal orquestra
+  as chamadas conforme o que mudou.
 
 ### Frontend — exibição (usar `ui-ux-pro-max`)
 - `lib/papeis.js`: separar em `CORES_NIVEL` (USUARIO/ADMIN/SUPER_ADMIN) e `CORES_QUALIFICACAO` (6 valores),
@@ -135,6 +159,8 @@ precisam de novo guard. Regras:
 - `roles.test.js` (nível), novo `qualificacao.test.js`, `escopo.test.js`, rotas de usuário (aprovar com
   qualificação e agrupamento por célula; nível vs qualificação; admin altera a própria qualificação),
   `papeis.test.js` web, selects/badges.
+- **Matriz do `requireGestor`** (M3 R2): ADMIN livre; PASTOR/LÍDER passam o gate grosso; co-líder e abaixo →
+  403; interação gate grosso × escopo fino (LÍDER sem vínculo passa o grosso e é barrado no fino).
 
 ---
 
@@ -146,7 +172,11 @@ precisam de novo guard. Regras:
   de dropar a coluna.
 - `escopo.js:podeGerenciarCelula`: "é líder desta célula" = usuário ∈ `celula.lideres`.
 - Rotas: `include:{lider}`→`{lideres}`; `POST /celulas/:id/lideres` (add) + `DELETE .../lideres/:userId`
-  (remove). Um usuário lidera várias; célula tem várias.
+  (remove). Um usuário lidera várias; célula tem várias. `GET /celulas/publicas` (`celulas.js:180,186`) troca
+  o `select` de `lider` para `lideres`.
+- **`podeGerenciarPendente` (aprovar/recusar, `usuarios.js:9-11`) migra nesta fase** (A2 da Review 2): passa
+  a autorizar se `alvo.celulaId ∈ {células que o gestor lidera}` **OU** `ADMIN+` — não mais
+  `alvo.celulaId === usuario.celulaId` (que é a célula de *membro* do líder). Idem a lista `GET /pendentes`.
 - **Remover liderança = perde VÍNCULO, não qualificação:** removido de 1 célula mantém LÍDER e os demais
   vínculos; removido de todas mantém LÍDER **sem vínculo** (estado válido).
 - **`User.celulaId` do líder** deixa de ser efeito de liderar. Membro=`celulaId`; liderança=junção;
@@ -176,6 +206,9 @@ precisam de novo guard. Regras:
 
 ### Criação de célula + aprovação de célula
 - **Quem cria** (B2): qualificação `LIDER`/`PASTOR` **ou** nível `ADMIN`/`SUPER_ADMIN`.
+- **Criador líder/pastor é inserido na junção `lideres` da célula que criou** (A1 da Review 2 — senão criaria
+  uma célula que não lidera). Admin cria **sem** se auto-vincular (pode designar líderes depois). Grava
+  `criadaPorId` (relação com `onDelete: SetNull`).
 - Célula criada por não-admin nasce **PENDENTE**; só aparece em `/celulas/publicas`, no checkin e na lista
   geral quando **aprovada por ADMIN**. Admin cria já aprovada.
 - **Schema:** novo `enum CelulaStatus { PENDENTE APROVADA }` + `Celula.status @default(APROVADA)` +
@@ -188,8 +221,11 @@ precisam de novo guard. Regras:
 
 ### Testes B
 - Junção N:N (add/remove/multi), migração preserva líderes; `podeGerenciarCelula` por conjunto; travas de
-  rebaixamento (0/1/>1 célula); ADMIN sem célula não quebra gating; criação por líder/pastor → pendente;
-  criação por admin → aprovada; aprovação de célula; filtros públicos escondem pendente.
+  rebaixamento (0/1/>1 célula); ADMIN sem célula não quebra gating; criação por líder/pastor → pendente **e
+  criador entra na junção**; criação por admin → aprovada; aprovação de célula; filtros públicos escondem
+  pendente; `podeGerenciarPendente` usa células lideradas (não `celulaId` de membro).
+- **Reconciliação da migração** (M4 R2): usuário na junção com qualificação < LÍDER é promovido a LÍDER;
+  `ADMIN`+`liderId` → `ADMIN`+`MEMBRO`+vínculo preservado+promovido a LÍDER.
 
 ---
 
@@ -198,9 +234,10 @@ precisam de novo guard. Regras:
 ### Os 3 eixos de alvo (combináveis, semântica **AND**)
 Um aviso (banner ou notificação) tem três filtros. **Cada eixo tem um flag "Todos" booleano** (fix C3 da
 Review 1 — resolve a ambiguidade "Todos × vazio" e o problema de célula criada *depois*):
-1. **Células** — `celulasTodas Boolean` + `celulasAlvo String[]`.
-2. **Qualificações** — `qualificacoesTodas Boolean` + `qualificacoesAlvo Qualificacao[]`.
-3. **Nível de acesso** — `niveisTodas Boolean` + `niveisAlvo NivelAcesso[]` (`USUARIO`/`ADMIN`; Super em ADMIN).
+1. **Células** — `celulasTodas Boolean @default(false)` + `celulasAlvo String[] @default([])`.
+2. **Qualificações** — `qualificacoesTodas Boolean @default(false)` + `qualificacoesAlvo Qualificacao[] @default([])`.
+3. **Nível de acesso** — `niveisTodas Boolean @default(false)` + `niveisAlvo NivelAcesso[] @default([])`
+   (`USUARIO`/`ADMIN`; Super em ADMIN). Os `@default` são obrigatórios p/ o `ADD COLUMN` não quebrar (C1 R2).
 
 **Regra de match (por conta, dedup — usuário vê 1×):** recebe sse `célulaMatch AND qualificaçãoMatch AND nívelMatch`:
 - `célulaMatch`: `celulasTodas` → true (inclui células futuras); senão `U.celulaId ∈ celulasAlvo` **OU**
@@ -248,6 +285,7 @@ Review 1 — resolve a ambiguidade "Todos × vazio" e o problema de célula cria
 - **Frontend `BannerBar.jsx`:** carrossel — 1 por vez, indicador ("• • •") quando há outros; troca
   **automática a cada 10s** com transição sutil; **pausa no hover** (retoma no mouse-leave); **clique**
   avança; respeita `prefers-reduced-motion` (sem auto-rotate; navegação manual). Banner expirado some.
+  **0 banners → não renderiza nada; 1 banner → sem indicador e sem auto-rotate** (B1 da Review 2).
 - **Editor (`AdminAvisos.jsx`):** aba Banner vira lista/CRUD com `SeletorPublico` + `DateTimePicker`
   (data+hora) **obrigatório** de expiração; não salva sem expiração.
 
