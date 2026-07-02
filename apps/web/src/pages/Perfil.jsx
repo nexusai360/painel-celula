@@ -7,6 +7,7 @@ import { formatarWhatsapp } from '../lib/whatsapp.js'
 import { mapearErroCampos } from '../lib/erros.js'
 import { ROTULO_PAPEL } from '../lib/papeis.js'
 import { AvatarUpload } from '../components/AvatarUpload.jsx'
+import { ConjugeSecao } from '../components/ConjugeSecao.jsx'
 import { Input } from '../components/ui/Input.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Select } from '../components/ui/Select.jsx'
@@ -142,6 +143,9 @@ export default function Perfil() {
                 onChange={setEstadoCivil}
                 placeholder="Selecione"
               />
+
+              {/* Cônjuge — só para casado(a) / união estável */}
+              {(estadoCivil === 'CASADO' || estadoCivil === 'UNIAO_ESTAVEL') && <ConjugeSecao />}
 
               {/* Email — read-only */}
               <div className="w-full">

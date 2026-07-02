@@ -56,6 +56,8 @@ model User {
   whatsapp     String?
   dataNascimento DateTime?
   estadoCivil    EstadoCivil?
+  // Cônjuge (vínculo confirmado dos dois lados). Sem relação formal para simplicidade.
+  conjugeId      String?
 
   googleSub             String?  @unique
   googleRefreshTokenEnc String?
@@ -148,6 +150,18 @@ model Testemunho {
   status      TestemunhoStatus @default(PENDENTE)
   criadoEm    DateTime         @default(now())
   concluidoEm DateTime?
+}
+
+// Solicitação de vínculo de cônjuge (duplo opt-in): o alvo precisa aceitar.
+model ConjugeSolicitacao {
+  id            String   @id @default(cuid())
+  solicitanteId String
+  alvoId        String
+  status        String   @default("PENDENTE") // PENDENTE | ACEITO | RECUSADO
+  criadoEm      DateTime @default(now())
+
+  @@unique([solicitanteId, alvoId])
+  @@index([alvoId])
 }
 
 model GoogleEventoSync {

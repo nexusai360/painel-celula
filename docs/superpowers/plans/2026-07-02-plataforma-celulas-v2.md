@@ -115,9 +115,10 @@ ADMIN/SUPER_ADMIN. ADMIN pode gerenciar MEMBRO↔LIDER e (des)ativar contas.
   PENDENTE/DEFERIDO: armazenamento de MÚLTIPLOS líderes (hoje 1 líder por célula;
   a UI já lida com array). Login de pendente é permitido (entra na área travada).
 - [x] Fase 3 — Endereço da célula (cidade/bairro/endereço/número/complemento/ponto ref; migration aditiva; form de criar célula). Só bairro exposto na seleção (Fase 2).
-- [~] Fase 4 — Perfil + cônjuge. FEITO 4a: data de nascimento (copy de aniversário)
-  + estado civil (enum) no perfil (schema/migration/rota/UI). FALTA 4b: vínculo de
-  cônjuge por e-mail com duplo opt-in (modelo VinculoConjuge + confirmação).
+- [x] Fase 4 — Perfil + cônjuge. 4a: data de nascimento + estado civil. 4b: vínculo
+  de cônjuge por e-mail (case-insensitive) com DUPLO OPT-IN (modelo ConjugeSolicitacao;
+  convite→aceite→vínculo mútuo; auto-aceite se convite recíproco; desvincular).
+  UI em ConjugeSecao (aparece p/ casado/união estável). Testado local.
 - [ ] Fase 5 — QR presença.
 - [ ] Fase 6 — Notificações + banner.
 - [ ] Fase 7 — Separação de áreas.

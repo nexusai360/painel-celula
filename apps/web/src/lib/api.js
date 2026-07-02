@@ -160,6 +160,25 @@ export async function apiSelecionarCelula(celulaId) {
   return data.usuario
 }
 
+// ---- Cônjuge (duplo opt-in) ----
+export async function apiConjuge() {
+  const { data } = await api.get('/perfil/conjuge')
+  return data
+}
+export async function apiConvidarConjuge(email) {
+  const { data } = await api.post('/perfil/conjuge', { email })
+  return data
+}
+export async function apiAceitarConjuge(id) {
+  await api.post(`/perfil/conjuge/${id}/aceitar`)
+}
+export async function apiRecusarConjuge(id) {
+  await api.post(`/perfil/conjuge/${id}/recusar`)
+}
+export async function apiRemoverConjuge() {
+  await api.delete('/perfil/conjuge')
+}
+
 // ---- Config ----
 export async function apiConfig() {
   const { data } = await api.get('/config')

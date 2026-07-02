@@ -62,4 +62,89 @@ export async function perfilRoutes(app) {
     const user = await prisma.user.update({ where: { id: request.usuario.id }, data: { celulaId }, ...COM_CELULA })
     return reply.send({ usuario: comCelula(user) })
   })
+
+  // ── Cônjuge (vínculo por e-mail com duplo opt-in) ──────────────────────────
+  const pendente = { permitirPendente: true }
+  const perfilPublico = { id: true, nome: true, email: true, avatar: true }
+
+  // Estado atual: cônjuge vinculado, convites recebidos e convite enviado pendente.
+  app.get('/perfil/conjuge', { preHandler: requireRole('MEMBRO', pendente) }, async (request, reply) => {
+    const meuId = request.usuario.id
+    const eu = await prisma.user.findUnique({ where: { id: meuId }, select: { conjugeId: true } })
+    const conjuge = eu?.conjugeId
+      ? await prisma.user.findUnique({ where: { id: eu.conjugeId }, select: perfilPublico })
+      : null
+    const recebidasRaw = await prisma.conjugeSolicitacao.findMany({
+      where: { alvoId: meuId, status: 'PENDENTE' }, orderBy: { criadoEm: 'desc' }
+    })
+    const solicitantes = await prisma.user.findMany({
+      where: { id: { in: recebidasRaw.map((r) => r.solicitanteId) } }, select: perfilPublico
+    })
+    const recebidas = recebidasRaw.map((r) => ({ id: r.id, solicitante: solicitantes.find((s) => s.id === r.solicitanteId) || null }))
+    const enviadaRaw = await prisma.conjugeSolicitacao.findFirst({ where: { solicitanteId: meuId, status: 'PENDENTE' } })
+    const enviada = enviadaRaw
+      ? { id: enviadaRaw.id, alvo: await prisma.user.findUnique({ where: { id: enviadaRaw.alvoId }, select: perfilPublico }) }
+      : null
+    return reply.send({ conjuge, recebidas, enviada })
+  })
+
+  // Convida o cônjuge pelo e-mail exato (sem busca aberta).
+  app.post('/perfil/conjuge', { preHandler: requireRole('MEMBRO', pendente) }, async (request, reply) => {
+    const meuId = request.usuario.id
+    const email = String(request.body?.email || '').trim()
+    if (!email) return reply.code(400).send({ erro: 'Informe o e-mail' })
+    const alvo = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } }, select: { id: true } })
+    if (!alvo) return reply.code(404).send({ erro: 'Não encontramos ninguém com esse e-mail' })
+    if (alvo.id === meuId) return reply.code(400).send({ erro: 'Você não pode se vincular a si mesmo' })
+    const eu = await prisma.user.findUnique({ where: { id: meuId }, select: { conjugeId: true } })
+    if (eu?.conjugeId) return reply.code(400).send({ erro: 'Você já tem um cônjuge vinculado' })
+    // Se o alvo já me convidou, aceita direto (vínculo mútuo).
+    const reversa = await prisma.conjugeSolicitacao.findFirst({ where: { solicitanteId: alvo.id, alvoId: meuId, status: 'PENDENTE' } })
+    if (reversa) {
+      await vincular(meuId, alvo.id, reversa.id)
+      return reply.send({ vinculado: true })
+    }
+    await prisma.conjugeSolicitacao.upsert({
+      where: { solicitanteId_alvoId: { solicitanteId: meuId, alvoId: alvo.id } },
+      update: { status: 'PENDENTE', criadoEm: new Date() },
+      create: { solicitanteId: meuId, alvoId: alvo.id }
+    })
+    return reply.send({ enviado: true })
+  })
+
+  async function vincular(aId, bId, solicitacaoId) {
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: aId }, data: { conjugeId: bId } }),
+      prisma.user.update({ where: { id: bId }, data: { conjugeId: aId } }),
+      prisma.conjugeSolicitacao.update({ where: { id: solicitacaoId }, data: { status: 'ACEITO' } })
+    ])
+  }
+
+  app.post('/perfil/conjuge/:id/aceitar', { preHandler: requireRole('MEMBRO', pendente) }, async (request, reply) => {
+    const meuId = request.usuario.id
+    const sol = await prisma.conjugeSolicitacao.findUnique({ where: { id: request.params.id } })
+    if (!sol || sol.alvoId !== meuId || sol.status !== 'PENDENTE') return reply.code(404).send({ erro: 'Convite não encontrado' })
+    await vincular(meuId, sol.solicitanteId, sol.id)
+    return reply.send({ ok: true })
+  })
+
+  app.post('/perfil/conjuge/:id/recusar', { preHandler: requireRole('MEMBRO', pendente) }, async (request, reply) => {
+    const meuId = request.usuario.id
+    const sol = await prisma.conjugeSolicitacao.findUnique({ where: { id: request.params.id } })
+    if (!sol || sol.alvoId !== meuId) return reply.code(404).send({ erro: 'Convite não encontrado' })
+    await prisma.conjugeSolicitacao.update({ where: { id: sol.id }, data: { status: 'RECUSADO' } })
+    return reply.send({ ok: true })
+  })
+
+  // Desfaz o vínculo (dos dois lados).
+  app.delete('/perfil/conjuge', { preHandler: requireRole('MEMBRO', pendente) }, async (request, reply) => {
+    const meuId = request.usuario.id
+    const eu = await prisma.user.findUnique({ where: { id: meuId }, select: { conjugeId: true } })
+    if (!eu?.conjugeId) return reply.send({ ok: true })
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: meuId }, data: { conjugeId: null } }),
+      prisma.user.update({ where: { id: eu.conjugeId }, data: { conjugeId: null } })
+    ])
+    return reply.send({ ok: true })
+  })
 }
