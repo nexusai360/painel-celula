@@ -48,3 +48,6 @@ tmp/
 branches/
 .agente/
 .agente-handoff.md
+
+# ── Estado local do Claude Code (não versionar) ──────────────────────────
+.claude/
