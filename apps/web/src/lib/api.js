@@ -154,6 +154,16 @@ export async function apiRecusarUsuario(id) {
   await api.post(`/usuarios/${id}/recusar`)
 }
 
+export async function apiCriarUsuario(dados) {
+  const { data } = await api.post('/usuarios', dados)
+  return data.usuario
+}
+
+export async function apiRedefinirSenha(id, senha) {
+  const { data } = await api.patch(`/usuarios/${id}/senha`, { senha })
+  return data
+}
+
 export async function apiAtualizarNivel(id, nivelAcesso) {
   const { data } = await api.patch(`/usuarios/${id}/nivel`, { nivelAcesso })
   return data.usuario

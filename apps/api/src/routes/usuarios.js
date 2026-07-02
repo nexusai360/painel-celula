@@ -3,8 +3,11 @@ import {
   requireRole, requireGestor, ehAdmin, podeEditarNivel, podeEditarQualificacao, qualificacaoMinima,
   TODOS_NIVEIS, TODAS_QUALIFICACOES,
 } from '../lib/roles.js'
-import { usuarioAdminUpdateSchema, normalizarWhatsapp } from '@icelula/shared'
+import {
+  usuarioAdminUpdateSchema, usuarioAdminCreateSchema, senhaResetSchema, normalizarWhatsapp,
+} from '@icelula/shared'
 import { publico } from '../lib/usuarios.js'
+import { hashSenha } from '../lib/password.js'
 
 // IDs das células que o usuário lidera (junção N:N).
 async function celulasLideradasIds(userId) {
@@ -61,6 +64,49 @@ export async function usuarioRoutes(app) {
       select: { id: true, nome: true, email: true, criadoEm: true, celula: { select: { nome: true } } }
     })
     return reply.send({ usuarios: usuarios.map((u) => ({ id: u.id, nome: u.nome, email: u.email, criadoEm: u.criadoEm, celulaNome: u.celula?.nome ?? null })) })
+  })
+
+  // Cria um usuário (ADMIN). Conta nasce APROVADA e ATIVA, com senha definida.
+  // Nível/qualificação concedidos respeitam as travas de RBAC do criador.
+  app.post('/usuarios', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+    const parsed = usuarioAdminCreateSchema.safeParse(request.body)
+    if (!parsed.success) return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
+    const { nome, email, senha, qualificacao, nivelAcesso } = parsed.data
+
+    if (!podeEditarNivel(request.usuario.nivelAcesso, 'USUARIO', nivelAcesso)) {
+      return reply.code(403).send({ erro: 'Sem permissão para conceder esse nível de acesso' })
+    }
+    if (!podeEditarQualificacao(request.usuario.nivelAcesso, request.usuario.qualificacao, qualificacao)) {
+      return reply.code(403).send({ erro: 'Sem permissão para definir essa qualificação' })
+    }
+
+    const existente = await prisma.user.findUnique({ where: { email } })
+    if (existente) return reply.code(409).send({ erro: 'E-mail já cadastrado' })
+
+    const whatsapp = parsed.data.whatsapp ? normalizarWhatsapp(parsed.data.whatsapp) : null
+    const user = await prisma.user.create({
+      data: {
+        nome, email, senhaHash: await hashSenha(senha),
+        nivelAcesso, qualificacao, whatsapp, aprovado: true, ativo: true,
+      },
+    })
+    return reply.code(201).send({ usuario: publico(user) })
+  })
+
+  // Redefine a senha de um usuário (ADMIN). Mexer em ADMIN/SUPER exige SUPER (self-exempt).
+  app.patch('/usuarios/:id/senha', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+    const { id } = request.params
+    const parsed = senhaResetSchema.safeParse(request.body)
+    if (!parsed.success) return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
+
+    const alvo = await prisma.user.findUnique({ where: { id } })
+    if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
+    if (id !== request.usuario.id && request.usuario.nivelAcesso !== 'SUPER_ADMIN' && ehAdmin(alvo.nivelAcesso)) {
+      return reply.code(403).send({ erro: 'Sem permissão' })
+    }
+
+    await prisma.user.update({ where: { id }, data: { senhaHash: await hashSenha(parsed.data.senha) } })
+    return reply.send({ ok: true })
   })
 
   // Aprova uma conta pendente (ADMIN+ qualquer; LÍDER só da própria célula).
