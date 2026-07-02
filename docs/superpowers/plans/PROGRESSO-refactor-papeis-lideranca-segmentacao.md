@@ -7,14 +7,14 @@
 
 ## Estado
 - **FASE A** — Nível × Qualificação — plano: `docs/superpowers/plans/2026-07-02-fase-a-nivel-x-qualificacao.md`
-  - [ ] T1 shared: `roles.js` (nível) + `qualificacao.js` + testes
-  - [ ] T2 prisma: enums + colunas + migração/backfill (mantém `papel`)
-  - [ ] T3 api `lib/roles.js`: requireRole(nível) + requireAuth + requireGestor
-  - [ ] T4 scripts de provisionamento (seed/criar-admin/garantir-super-admin)
-  - [ ] T5 rotas: guards + desacoplar célula↔papel + PATCH nivel/qualificacao + aprovar/recusar + JWT
-  - [ ] T6 web `lib/papeis.js`: CORES_NIVEL + CORES_QUALIFICACAO
-  - [ ] T7 web componentes: Nivel/Qualificacao Badge+Select
-  - [ ] T8 web telas: card (tag qualif + ícone nível hover), aprovação c/ qualificação agrupada, modal editar, guards, Perfil/AvatarMenu
+  - [x] T1 shared: `roles.js` (nível) + `qualificacao.js` + testes (22 verdes)
+  - [x] T2 prisma: enums + colunas + migração/backfill (aplicada; super admin→SUPER_ADMIN+MEMBRO)
+  - [x] T3+T5 api: requireGestor/requireAuth; 13 rotas; desacopla célula↔papel; PATCH nivel/qualificacao; JWT
+  - [x] T4 scripts de provisionamento
+  - [x] T6 web `lib/papeis.js`: CORES_NIVEL + CORES_QUALIFICACAO
+  - [x] T7 web componentes: Nivel/Qualificacao Badge+Select
+  - [x] T8 web telas: card, aprovação agrupada, modal editar, guards, Perfil/AvatarMenu, api.js
+  - [ ] VALIDAÇÃO E2E (rebuild container + smoke API) ← agora
   - [ ] T9 drop `papel` + enum `Papel`
 - **FASE B** — Liderança N:N + admin sem célula + aprovação de célula — (após A)
 - **FASE C** — Segmentação (banner carrossel/expiração + notificação alvo 3 eixos + leitura por item) — (após B)
