@@ -179,26 +179,36 @@ export async function apiNotificacoes() {
   const { data } = await api.get('/notificacoes')
   return data
 }
-export async function apiLerNotificacoes() {
-  await api.post('/notificacoes/ler')
+export async function apiLerNotificacao(id) {
+  await api.post(`/notificacoes/${id}/ler`)
+}
+export async function apiLerTodasNotificacoes() {
+  await api.post('/notificacoes/ler-tudo')
 }
 export async function apiEnviarNotificacao(payload) {
   const { data } = await api.post('/notificacoes', payload)
   return data
 }
 
-// ---- Banner administrativo ----
-export async function apiBanner() {
+// ---- Banner administrativo (vários, com expiração e alvo) ----
+export async function apiBanners() {
   const { data } = await api.get('/banner')
-  return data.banner
+  return data.banners
 }
-export async function apiBannerAdmin() {
+export async function apiBannersAdmin() {
   const { data } = await api.get('/banner/admin')
+  return data.banners
+}
+export async function apiCriarBanner(payload) {
+  const { data } = await api.post('/banner', payload)
   return data.banner
 }
-export async function apiSalvarBanner(mensagem, ativo) {
-  const { data } = await api.put('/banner', { mensagem, ativo })
+export async function apiAtualizarBanner(id, payload) {
+  const { data } = await api.patch(`/banner/${id}`, payload)
   return data.banner
+}
+export async function apiExcluirBanner(id) {
+  await api.delete(`/banner/${id}`)
 }
 
 // ---- Check-in por QR Code (marca presença de hoje, se na janela) ----
