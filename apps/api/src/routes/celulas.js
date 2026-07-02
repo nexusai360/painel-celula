@@ -108,7 +108,8 @@ export async function celulaRoutes(app) {
             criadaPorId: criador.id, ...endereco,
             // Criador não-admin (líder/pastor) vira líder da célula criada.
             ...(admin ? {} : { lideres: { connect: { id: criador.id } } })
-          }
+          },
+          include: { lideres: LIDERES_SELECT }
         })
         break
       } catch (err) {
