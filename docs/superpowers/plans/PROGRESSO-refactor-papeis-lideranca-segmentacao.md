@@ -26,7 +26,13 @@
   - [x] B5 admin sem célula (guards ok; TopBar por qualificação)
   - [x] B6 frontend multi-líder + aba Aprovações + rota Criar célula p/ líder + MembrosPanel/CelulaDetalhe
   - [x] B7 pendentes/aprovar/recusar por células lideradas
-- **FASE C** — Segmentação (3 eixos AND: células/qualificações/níveis com flags Todos; dedup) + banner CRUD carrossel/expiração + notificação leitura por item (NotificacaoLeitura) + marcar-tudo + modal — ← PRÓXIMA
+- **✅ FASE C COMPLETA E LIVE NO 3200** — validada E2E (banner exige expiração; trava eixo-vazio; entrega por 3 eixos AND com SUPER→ADMIN; notificação leitura por item + marcar-tudo)
+  - [x] schema (Banner/Notificacao 3 eixos + expiraEm + NotificacaoLeitura) + migração idempotente
+  - [x] lib/alvo.js (montarWhereAlvo, normalizarAlvo, alvoInvalido)
+  - [x] banner.js CRUD segmentado + notificacoes.js leitura por item + marcar-tudo
+  - [x] frontend: SeletorPublico (3 eixos), AdminAvisos (banner CRUD+expiração / notificação), BannerBar carrossel, NotificacoesSino modal+por-item, api.js
+  - Nota: composer de notificação hoje vive no admin (AdminAvisos, SoAdmin). Backend já aceita líder enviar; expor UI de notificação para líderes ficou como follow-up menor.
+- **⏳ TODAS AS 3 FASES IMPLEMENTADAS E VALIDADAS E2E LOCALMENTE.**
 - **⚠️ PRÉ-DEPLOY OBRIGATÓRIO:** os testes de rota da API (celulas/usuarios/presenca/encontros/testemunhos/escopo.test.js) referenciam `liderId`/`papel` — quebrados pelo refactor A+B. Precisam ser reescritos para o novo modelo ANTES do push/deploy (rodam no CI). Passe dedicado.
 - **FASE C** — Segmentação (banner carrossel/expiração + notificação alvo 3 eixos + leitura por item) — (após B)
 - **DEPLOY** — push na `main` → CI → GHCR → Shepherd; acompanhar até prod no ar; avisar o dono.
