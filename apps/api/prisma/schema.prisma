@@ -58,6 +58,8 @@ model User {
   estadoCivil    EstadoCivil?
   // Cônjuge (vínculo confirmado dos dois lados). Sem relação formal para simplicidade.
   conjugeId      String?
+  // Marca de leitura das notificações (não lidas = criadas após esta data).
+  notificacoesLidasEm DateTime?
 
   googleSub             String?  @unique
   googleRefreshTokenEnc String?
@@ -150,6 +152,20 @@ model Testemunho {
   status      TestemunhoStatus @default(PENDENTE)
   criadoEm    DateTime         @default(now())
   concluidoEm DateTime?
+}
+
+// Notificação in-app. escopo: GLOBAL (todos) ou CELULA (membros de celulaId).
+model Notificacao {
+  id       String   @id @default(cuid())
+  autorId  String
+  escopo   String   // GLOBAL | CELULA
+  celulaId String?
+  titulo   String
+  corpo    String
+  criadoEm DateTime @default(now())
+
+  @@index([celulaId])
+  @@index([criadoEm])
 }
 
 // Banner administrativo (aviso no topo da plataforma). Um registro ativo por vez.

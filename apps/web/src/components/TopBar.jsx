@@ -3,6 +3,7 @@ import { NavLink, Link } from 'react-router-dom'
 import { CalendarDays, Home, Users2, HandHeart, Sparkles, Heart, Menu, UserCheck } from 'lucide-react'
 import { Logo } from './ui/Logo.jsx'
 import { AvatarMenu } from './AvatarMenu.jsx'
+import { NotificacoesSino } from './NotificacoesSino.jsx'
 import { NavDrawer } from './NavDrawer.jsx'
 import { ehAdmin } from '../lib/papeis.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -72,6 +73,7 @@ export function TopBar() {
               ))}
             </nav>
           )}
+          <NotificacoesSino />
           <AvatarMenu />
         </div>
       </div>

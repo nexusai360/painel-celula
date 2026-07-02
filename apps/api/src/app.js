@@ -15,6 +15,7 @@ import { perfilRoutes } from './routes/perfil.js'
 import { pedidoRoutes } from './routes/pedidos.js'
 import { testemunhoRoutes } from './routes/testemunhos.js'
 import { bannerRoutes } from './routes/banner.js'
+import { notificacaoRoutes } from './routes/notificacoes.js'
 
 export function buildApp() {
   const app = Fastify({ logger: false, trustProxy: true })
@@ -71,6 +72,7 @@ export function buildApp() {
   app.register(pedidoRoutes)
   app.register(testemunhoRoutes)
   app.register(bannerRoutes)
+  app.register(notificacaoRoutes)
 
   return app
 }

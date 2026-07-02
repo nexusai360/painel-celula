@@ -149,6 +149,19 @@ export async function apiAtualizarUsuarioAtivo(id, ativo) {
   return data.usuario
 }
 
+// ---- Notificações in-app ----
+export async function apiNotificacoes() {
+  const { data } = await api.get('/notificacoes')
+  return data
+}
+export async function apiLerNotificacoes() {
+  await api.post('/notificacoes/ler')
+}
+export async function apiEnviarNotificacao(payload) {
+  const { data } = await api.post('/notificacoes', payload)
+  return data
+}
+
 // ---- Banner administrativo ----
 export async function apiBanner() {
   const { data } = await api.get('/banner')

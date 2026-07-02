@@ -124,10 +124,10 @@ ADMIN/SUPER_ADMIN. ADMIN pode gerenciar MEMBRO↔LIDER e (des)ativar contas.
   na janela (após o horário; TZ SP). Front chama check-in em QrLanding (logado),
   Register (pós-cadastro QR) e Login (?celula). Cadastro pelo site (sem QR) segue
   pendente. FALTA (refino): passar qrToken no link "Criar conta" do Login.
-- [~] Fase 6 — FEITO 6a: BANNER administrativo (modelo Banner + rotas GET/PUT;
-  editor inline pro ADMIN no BannerBar, exibido abaixo do header pra todos os
-  aprovados). FALTA 6b: notificações in-app (central/sino; envio em massa por
-  ADMIN global e por LÍDER aos membros da célula).
+- [x] Fase 6 — 6a BANNER administrativo. 6b NOTIFICAÇÕES in-app: modelo Notificacao
+  (escopo GLOBAL|CELULA) + leitura via User.notificacoesLidasEm; rotas GET /notificacoes
+  (lista+naoLidas+podeEnviar), POST /notificacoes/ler, POST /notificacoes (ADMIN global;
+  LÍDER só da própria célula). Sino no header (badge, painel, compor pra quem pode enviar).
 - [ ] Fase 7 — Separação de áreas.
 
 > Observação do dono: virão mais requisitos em áudios futuros — manter o plano
