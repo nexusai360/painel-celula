@@ -8,7 +8,7 @@ import { cifrar } from '../lib/google/cripto.js'
 let app
 const sufixo = Date.now()
 
-let celulaId, liderId, membroId, adminId, outraCelulaId, outroLiderId
+let celulaId, liderId, membroId, adminId, outraCelulaId, outroLiderId, membroSemCelaId
 let adminToken, liderToken, membroToken, membroSemCelulaToken, outroLiderToken
 let encontroId
 
@@ -53,6 +53,19 @@ beforeAll(async () => {
     }
   })
   membroId = membro.id
+
+  // Usuário MEMBRO real SEM célula (para testar escopo; requireRole lê o celulaId
+  // fresco do banco, então não dá mais para forjar via token).
+  const membroSemCela = await prisma.user.create({
+    data: {
+      nome: 'Membro Sem Cela',
+      email: `membro-sem-cela-${sufixo}@test.com`,
+      senhaHash: await hashSenha('senha123'),
+      papel: 'MEMBRO',
+      celulaId: null
+    }
+  })
+  membroSemCelaId = membroSemCela.id
 
   // ── Admin ────────────────────────────────────────────────────────────────────
   const admin = await prisma.user.create({
@@ -104,7 +117,7 @@ beforeAll(async () => {
   adminToken = app.jwt.sign({ id: adminId, papel: 'ADMIN', celulaId: null })
   liderToken = app.jwt.sign({ id: liderId, papel: 'LIDER', celulaId })
   membroToken = app.jwt.sign({ id: membroId, papel: 'MEMBRO', celulaId })
-  membroSemCelulaToken = app.jwt.sign({ id: membroId, papel: 'MEMBRO', celulaId: null })
+  membroSemCelulaToken = app.jwt.sign({ id: membroSemCelaId, papel: 'MEMBRO', celulaId: null })
   outroLiderToken = app.jwt.sign({ id: outroLiderId, papel: 'LIDER', celulaId: outraCelulaId })
 })
 
@@ -117,7 +130,7 @@ afterAll(async () => {
       .catch(() => {})
   }
 
-  const userIds = [liderId, membroId, adminId, outroLiderId].filter(Boolean)
+  const userIds = [liderId, membroId, adminId, outroLiderId, membroSemCelaId].filter(Boolean)
   if (userIds.length > 0) {
     await prisma.user
       .updateMany({ where: { id: { in: userIds } }, data: { celulaId: null, papel: 'MEMBRO' } })

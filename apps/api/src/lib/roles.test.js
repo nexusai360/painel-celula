@@ -17,6 +17,6 @@ describe('temNivel', () => {
     expect(temNivel('MEMBRO', 'LIDER')).toBe(false)
   })
   it('expõe ranking', () => {
-    expect(PAPEL_RANK).toEqual({ MEMBRO: 1, LIDER: 2, ADMIN: 3 })
+    expect(PAPEL_RANK).toEqual({ MEMBRO: 1, LIDER: 2, ADMIN: 3, SUPER_ADMIN: 4 })
   })
 })
