@@ -43,6 +43,14 @@
   `papel`) precisam migrar para o novo modelo (nível/qualif; junção `lideres`). RODAM LOCAL contra o docker
   DB: `DATABASE_URL="postgresql://icelula:icelula@localhost:5432/testfresh?schema=public" npx vitest run apps/api`.
   Unit puros já verdes (escopo/roles/qualificacao/etc). Este é o próximo passo p/ deixar o CI verde.
+  - **ACHADO (2026-07-02):** ao rodar `apps/api/src/routes/pedidos.test.js` isolado contra `testfresh`
+    dá `PrismaClientInitializationError` no `beforeAll` (create de user) com "Can not use undefined value
+    within array" — NÃO é só o `papel`; é um problema mais profundo (provável interação do client Prisma
+    regenerado + colunas array enum `@default([])` + execução paralela do vitest compartilhando o mesmo DB).
+    Precisa investigação dedicada: rodar cada arquivo com `--no-file-parallelism`/isolado, resetar `testfresh`
+    entre arquivos, e só então migrar setup (papel→nível/qualif; `celula.update({liderId})`→junção
+    `lideres:{connect}`; `PATCH /papel`→`/nivel`+`/qualificacao`; `POST /celulas/:id/lider`→`/lideres`).
+  - **Deploy NÃO depende disso** — já está live e verificado em prod (celula.nexusai360.com).
 - **⚠️ PRÉ-DEPLOY OBRIGATÓRIO:** os testes de rota da API (celulas/usuarios/presenca/encontros/testemunhos/escopo.test.js) referenciam `liderId`/`papel` — quebrados pelo refactor A+B. Precisam ser reescritos para o novo modelo ANTES do push/deploy (rodam no CI). Passe dedicado.
 - **FASE C** — Segmentação (banner carrossel/expiração + notificação alvo 3 eixos + leitura por item) — (após B)
 - **DEPLOY** — push na `main` → CI → GHCR → Shepherd; acompanhar até prod no ar; avisar o dono.
