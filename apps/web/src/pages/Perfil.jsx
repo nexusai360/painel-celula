@@ -6,27 +6,21 @@ import { apiAtualizarPerfil } from '../lib/api.js'
 import { formatarWhatsapp } from '../lib/whatsapp.js'
 import { mapearErroCampos } from '../lib/erros.js'
 import { ROTULO_PAPEL } from '../lib/papeis.js'
+import { ehCasadoInicial, mapBackEstadoCivil } from '../lib/estadoCivil.js'
 import { AvatarUpload } from '../components/AvatarUpload.jsx'
 import { ConjugeSecao } from '../components/ConjugeSecao.jsx'
 import { Input } from '../components/ui/Input.jsx'
 import { Button } from '../components/ui/Button.jsx'
-import { Select } from '../components/ui/Select.jsx'
+import { Checkbox } from '../components/ui/Checkbox.jsx'
 import { Card } from '../components/ui/Card.jsx'
-
-const OPCOES_ESTADO_CIVIL = [
-  { value: 'SOLTEIRO', label: 'Solteiro(a)' },
-  { value: 'CASADO', label: 'Casado(a)' },
-  { value: 'UNIAO_ESTAVEL', label: 'União estável' },
-  { value: 'DIVORCIADO', label: 'Divorciado(a)' },
-  { value: 'VIUVO', label: 'Viúvo(a)' }
-]
 
 export default function Perfil() {
   const { usuario, aplicarUsuario, sair } = useAuth()
 
   // Avatar is managed outside react-hook-form (it's a data URL, not a text field)
   const [avatarUrl, setAvatarUrl] = useState(usuario?.avatar ?? null)
-  const [estadoCivil, setEstadoCivil] = useState(usuario?.estadoCivil ?? '')
+  const [casadoInicial] = useState(ehCasadoInicial(usuario?.estadoCivil))
+  const [casado, setCasado] = useState(ehCasadoInicial(usuario?.estadoCivil))
   const [sucesso, setSucesso] = useState(false)
   const [erroGeral, setErroGeral] = useState(null)
 
@@ -52,13 +46,16 @@ export default function Perfil() {
     const whatsappRaw = valores.whatsapp.replace(/\D/g, '') || null
 
     try {
-      const usuarioAtualizado = await apiAtualizarPerfil({
+      const payload = {
         nome: valores.nome,
         whatsapp: whatsappRaw,
         avatar: avatarUrl,
         dataNascimento: valores.dataNascimento || null,
-        estadoCivil: estadoCivil || null,
-      })
+      }
+      // Só grava estado civil em transição real do checkbox (preserva legado).
+      const ec = mapBackEstadoCivil(casadoInicial, casado)
+      if (ec !== undefined) payload.estadoCivil = ec
+      const usuarioAtualizado = await apiAtualizarPerfil(payload)
       aplicarUsuario(usuarioAtualizado)
       setSucesso(true)
       setTimeout(() => setSucesso(false), 3000)
@@ -135,17 +132,21 @@ export default function Perfil() {
                 </p>
               </div>
 
-              {/* Estado civil */}
-              <Select
-                label="Estado civil"
-                options={OPCOES_ESTADO_CIVIL}
-                value={estadoCivil}
-                onChange={setEstadoCivil}
-                placeholder="Selecione"
-              />
-
-              {/* Cônjuge — só para casado(a) / união estável */}
-              {(estadoCivil === 'CASADO' || estadoCivil === 'UNIAO_ESTAVEL') && <ConjugeSecao />}
+              {/* Estado civil — checkbox discreto; ao marcar, revela o cônjuge */}
+              <div className="rounded-xl border border-border bg-surface/50 p-4">
+                <Checkbox
+                  id="casado"
+                  label="Sou casado(a)"
+                  descricao="Marque para vincular seu cônjuge por e-mail."
+                  checked={casado}
+                  onChange={setCasado}
+                />
+                {casado && (
+                  <div className="mt-4">
+                    <ConjugeSecao />
+                  </div>
+                )}
+              </div>
 
               {/* Email — read-only */}
               <div className="w-full">
