@@ -139,6 +139,16 @@ export async function apiRecusarUsuario(id) {
   await api.post(`/usuarios/${id}/recusar`)
 }
 
+export async function apiAtualizarPapel(id, papel) {
+  const { data } = await api.patch(`/usuarios/${id}/papel`, { papel })
+  return data.usuario
+}
+
+export async function apiAtualizarUsuarioAtivo(id, ativo) {
+  const { data } = await api.put(`/usuarios/${id}`, { ativo })
+  return data.usuario
+}
+
 // ---- Config ----
 export async function apiConfig() {
   const { data } = await api.get('/config')

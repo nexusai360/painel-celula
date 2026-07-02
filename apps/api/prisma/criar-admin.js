@@ -1,5 +1,6 @@
-// Cria (ou promove) um usuário ADMIN a partir de variáveis de ambiente.
-// Use em produção para criar o primeiro administrador — em vez do seed de demo.
+// Cria (ou promove) o usuário DONO (SUPER_ADMIN) a partir de variáveis de ambiente.
+// Use em produção para garantir o super admin — em vez do seed de demo.
+// O super admin é o dono da plataforma (único a conceder ADMIN/SUPER_ADMIN).
 //
 //   ADMIN_EMAIL=voce@dominio.com ADMIN_SENHA='umaSenhaForte' \
 //   ADMIN_NOME='Seu Nome' npm run admin --workspace apps/api
@@ -18,8 +19,8 @@ if (!email || !senha) {
 const senhaHash = await hashSenha(senha)
 const admin = await prisma.user.upsert({
   where: { email },
-  update: { papel: 'ADMIN', ativo: true, aprovado: true, senhaHash },
-  create: { nome, email, senhaHash, papel: 'ADMIN', aprovado: true }
+  update: { papel: 'SUPER_ADMIN', ativo: true, aprovado: true, senhaHash },
+  create: { nome, email, senhaHash, papel: 'SUPER_ADMIN', aprovado: true }
 })
-console.log(`Admin pronto: ${admin.email} (papel ${admin.papel})`)
+console.log(`Super admin pronto: ${admin.email} (papel ${admin.papel})`)
 await prisma.$disconnect()

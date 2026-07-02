@@ -1,7 +1,9 @@
 import { prisma } from '../prisma.js'
-import { requireRole } from '../lib/roles.js'
+import { requireRole, podeEditarPapel } from '../lib/roles.js'
 import { usuarioAdminUpdateSchema, normalizarWhatsapp } from '@icelula/shared'
 import { publico } from '../lib/usuarios.js'
+
+const PAPEIS_VALIDOS = ['MEMBRO', 'LIDER', 'ADMIN', 'SUPER_ADMIN']
 
 export async function usuarioRoutes(app) {
   // Lista/busca usuários (ADMIN) — usado para atribuir líder. Nunca expõe senhaHash.
@@ -48,6 +50,24 @@ export async function usuarioRoutes(app) {
     const alvo = await prisma.user.findUnique({ where: { id } })
     if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
     const user = await prisma.user.update({ where: { id }, data: { aprovado: true } })
+    return reply.send({ usuario: publico(user) })
+  })
+
+  // Altera o papel (nível de acesso) de um usuário.
+  // Só SUPER_ADMIN concede/revoga ADMIN ou SUPER_ADMIN; ADMIN troca MEMBRO<->LIDER.
+  app.patch('/usuarios/:id/papel', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+    const { id } = request.params
+    const novo = request.body?.papel
+    if (!PAPEIS_VALIDOS.includes(novo)) return reply.code(400).send({ erro: 'Papel inválido' })
+    if (id === request.usuario.id) return reply.code(400).send({ erro: 'Você não pode alterar o próprio papel' })
+
+    const alvo = await prisma.user.findUnique({ where: { id } })
+    if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
+    if (!podeEditarPapel(request.usuario.papel, alvo.papel, novo)) {
+      return reply.code(403).send({ erro: 'Sem permissão para definir esse nível de acesso' })
+    }
+
+    const user = await prisma.user.update({ where: { id }, data: { papel: novo } })
     return reply.send({ usuario: publico(user) })
   })
 

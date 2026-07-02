@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext.jsx'
 import { ConfigProvider } from './context/ConfigContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 import { ProtectedRoute } from './routes/ProtectedRoute.jsx'
+import { ehAdmin } from './lib/papeis.js'
 import { AppLayout } from './components/AppLayout.jsx'
 import QrLanding from './pages/QrLanding.jsx'
 import Login from './pages/Login.jsx'
@@ -23,7 +24,7 @@ import NotFound from './pages/NotFound.jsx'
 
 function InicioOuCelulas() {
   const { usuario } = useAuth()
-  return usuario?.papel === 'ADMIN' ? <Navigate to="/app/celulas" replace /> : <AppHome />
+  return ehAdmin(usuario?.papel) ? <Navigate to="/app/celulas" replace /> : <AppHome />
 }
 
 function SoLider({ children }) {
@@ -33,7 +34,7 @@ function SoLider({ children }) {
 
 function SoAdmin({ children }) {
   const { usuario } = useAuth()
-  return usuario?.papel === 'ADMIN' ? children : <Navigate to="/app" replace />
+  return ehAdmin(usuario?.papel) ? children : <Navigate to="/app" replace />
 }
 
 export default function App() {

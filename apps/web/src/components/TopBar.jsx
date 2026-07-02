@@ -4,12 +4,13 @@ import { CalendarDays, Home, Users2, HandHeart, Sparkles, Heart, Menu, UserCheck
 import { Logo } from './ui/Logo.jsx'
 import { AvatarMenu } from './AvatarMenu.jsx'
 import { NavDrawer } from './NavDrawer.jsx'
+import { ehAdmin } from '../lib/papeis.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 // Fonte única dos itens de navegação por papel (consumida pela TopBar e pelo NavDrawer).
 export function linksPorPapel(usuario) {
   const { papel, celulaId } = usuario || {}
-  if (papel === 'ADMIN') return [
+  if (ehAdmin(papel)) return [
     { to: '/app/celulas', label: 'Células', icon: Users2 },
     { to: '/app/usuarios', label: 'Usuários', icon: UserCheck }
   ]
