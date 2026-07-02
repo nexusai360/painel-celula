@@ -152,6 +152,15 @@ model Testemunho {
   concluidoEm DateTime?
 }
 
+// Banner administrativo (aviso no topo da plataforma). Um registro ativo por vez.
+model Banner {
+  id             String   @id @default(cuid())
+  mensagem       String
+  ativo          Boolean  @default(false)
+  atualizadoPorId String?
+  atualizadoEm   DateTime @updatedAt @default(now())
+}
+
 // Solicitação de vínculo de cônjuge (duplo opt-in): o alvo precisa aceitar.
 model ConjugeSolicitacao {
   id            String   @id @default(cuid())

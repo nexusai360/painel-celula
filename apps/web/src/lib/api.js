@@ -149,6 +149,20 @@ export async function apiAtualizarUsuarioAtivo(id, ativo) {
   return data.usuario
 }
 
+// ---- Banner administrativo ----
+export async function apiBanner() {
+  const { data } = await api.get('/banner')
+  return data.banner
+}
+export async function apiBannerAdmin() {
+  const { data } = await api.get('/banner/admin')
+  return data.banner
+}
+export async function apiSalvarBanner(mensagem, ativo) {
+  const { data } = await api.put('/banner', { mensagem, ativo })
+  return data.banner
+}
+
 // ---- Check-in por QR Code (marca presença de hoje, se na janela) ----
 export async function apiCheckinQr(qrToken) {
   const { data } = await api.post(`/qr/${qrToken}/checkin`)
