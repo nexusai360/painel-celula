@@ -4,11 +4,20 @@ import { materializarEncontros } from '../src/lib/encontros.service.js'
 
 const SENHA = '123456'
 
+// Mapeia o papel legado nos dois eixos novos (nível de acesso + qualificação).
+function eixos(papel) {
+  if (papel === 'SUPER_ADMIN') return { nivelAcesso: 'SUPER_ADMIN', qualificacao: 'MEMBRO' }
+  if (papel === 'ADMIN') return { nivelAcesso: 'ADMIN', qualificacao: 'MEMBRO' }
+  if (papel === 'LIDER') return { nivelAcesso: 'USUARIO', qualificacao: 'LIDER' }
+  return { nivelAcesso: 'USUARIO', qualificacao: 'MEMBRO' }
+}
+
 async function upsertUsuario(nome, email, papel, celulaId = null) {
+  const e = eixos(papel)
   return prisma.user.upsert({
     where: { email },
-    update: { papel, celulaId },
-    create: { nome, email, senhaHash: await hashSenha(SENHA), papel, celulaId }
+    update: { papel, ...e, celulaId },
+    create: { nome, email, senhaHash: await hashSenha(SENHA), papel, ...e, celulaId }
   })
 }
 
@@ -34,7 +43,9 @@ async function main() {
       nome: 'Administrador',
       email: 'admin@icelula.app',
       senhaHash: await hashSenha('admin123'),
-      papel: 'ADMIN'
+      papel: 'ADMIN',
+      nivelAcesso: 'ADMIN',
+      qualificacao: 'MEMBRO'
     }
   })
 
