@@ -1,124 +1,198 @@
-# Deploy — Painel Célula (Hineni)
+# Deploy — CAMINHO DAS PEDRAS (ler ANTES de qualquer deploy)
 
-Produção: **`https://celula.nexusai360.com`**
+> **REGRA DE RAIZ.** Ao pensar em deploy/redeploy/ajuste em produção, a PRIMEIRA
+> coisa é ler este arquivo. Ele tem o fluxo certo, por que cada peça existe e os
+> parâmetros/coordenadas reais. **Não improvisar, não investigar o servidor antes
+> de seguir os passos daqui.** Mesmo padrão dos projetos irmãos (nexus-odoo,
+> nexus-nfe, nexus-blueprint) na mesma VPS.
 
-Segue o mesmo padrão das stacks **nexus-odoo** e **nexus-insights**:
-VPS Hostinger → **Docker Swarm + Portainer** → **Traefik** (SSL Let's Encrypt,
-rede externa `rede_nexusAI`) → imagem publicada no **GHCR** →
-**auto-deploy pelo Shepherd** rodando dentro da VPS.
+Produção: **https://celula.nexusai360.com**
 
-## Arquitetura da imagem
+---
 
-Imagem **única** (`docker/Dockerfile`, multi-stage, `node:24-alpine`, usuário
-não-root `1001`, porta **3000**) que serve **API + front na mesma origem**
-(topologia "serviço único"): a API Fastify serve os estáticos de `apps/web/dist`
-e faz o fallback SPA. Não há CORS nesse modo.
+## 1. TL;DR — como se faz deploy AGORA
 
-No boot, o `docker/entrypoint.sh`:
-1. `prisma migrate deploy` (nunca `migrate dev`);
-2. cria/promove o admin real de forma idempotente (upsert) se `ADMIN_EMAIL` +
-   `ADMIN_SENHA` estiverem definidos (o seed de **demo** nunca roda em produção);
-3. inicia `node apps/api/src/server.js`.
+**Você só dá push/merge na `main`. A produção se atualiza sozinha em ~10 min.**
 
-## Fluxo de deploy (dia a dia)
-
-```
-git push / merge do PR na main
-        │
-        ▼
-GitHub Actions "Build and Push"  →  ghcr.io/nexusai360/painel-celula:latest (+ :sha-XXXX)
-        │
-        ▼
-Shepherd (na VPS, a cada ~5 min) detecta a nova :latest e faz
-`docker service update` do serviço com label com.nexus.autodeploy=true
-        │
-        ▼
-Traefik roteia celula.nexusai360.com  →  app:3000  (TLS Let's Encrypt)
+```bash
+git push origin main
+# O GitHub builda a imagem e o Shepherd (na VPS) atualiza a produção sozinho.
 ```
 
-**Atualizar produção = abrir e mergear um PR na `main`.** Nunca commitar direto
-na `main`. Se a entrega incluir novas migrations, elas são aplicadas
-automaticamente pelo entrypoint no boot do container novo.
+Para **forçar na hora** (sem esperar o Shepherd) ou se ele estiver fora:
 
-> O runner do GitHub **não alcança** a VPS (bloqueio de borda). Por isso o
-> deploy não é disparado pelo Actions — quem redeploya é o **Shepherd** dentro
-> da VPS, exatamente como no nexus-odoo. O Actions só **builda e publica**.
+```bash
+npm run deploy          # força o re-pull da :latest e valida o /health
+npm run deploy:status   # só mostra o estado atual (não mexe)
+```
 
-## Registry
+Pré-requisito dos dois: a imagem nova já publicada no GHCR (workflow
+"Build and Push" verde). Confere com:
 
-- **GHCR** — `ghcr.io/nexusai360/painel-celula`
-- Tags: `:latest` e `:sha-<git sha>` (a `:sha` permite rollback)
-- Auth de push: `GITHUB_TOKEN` embutido do Actions (`packages: write`). Sem PAT externo.
-- O pacote é **privado** (org `nexusai360`, igual a nexus-odoo/nexus-nfe). O pull
-  no Swarm usa a credencial de registry do nó (`docker login ghcr.io`) — a mesma
-  que já serve os projetos irmãos. Não precisa ser público.
-- No primeiro deploy, o serviço foi criado via API do Portainer e o pull inicial
-  foi forçado com `X-Registry-Auth` (token com `read:packages`). Depois disso o
-  Shepherd cuida sozinho.
+```bash
+gh run list --repo nexusai360/painel-celula --workflow "Build and Push" --limit 1
+```
 
-## Variáveis de ambiente (definidas na stack do Portainer)
+### 1.1 Mudança de schema (Prisma) — aplica sozinho no boot
 
-| Variável | Obrigatória | Descrição |
-|---|---|---|
-| `DATABASE_URL` | **sim** | URL do Postgres da stack. Ex.: `postgresql://icelula:<senha>@db:5432/icelula?schema=public`. Se o DNS do overlay oscilar, use o FQDN `painel-celula_db`. |
-| `DB_PASSWORD` | **sim** | Senha do Postgres da stack (usada por `db` e por `DATABASE_URL`). |
-| `JWT_SECRET` | **sim** | Segredo forte. Gere: `openssl rand -hex 48`. Sem ele, com `NODE_ENV=production`, a API se recusa a subir. |
-| `NODE_ENV` | sim | `production`. |
-| `TZ` | **sim** | `America/Sao_Paulo` — a janela de presença usa data local. |
-| `HOST` | recomendado | `0.0.0.0`. |
-| `API_PORT` | não | Porta da API (default 3000). |
-| `ADMIN_EMAIL` | recomendado | Cria/promove o admin real no boot (idempotente). |
-| `ADMIN_SENHA` | recomendado | Senha do admin real. |
-| `ADMIN_NOME` | opcional | Nome do admin (default "Administrador"). |
-| `CORS_ORIGIN` | não | Só se o front for servido de outro domínio. No serviço único, deixe vazio. |
-| `GOOGLE_OAUTH_ENABLED` e cia. | opcional | Integração Google Calendar — desligada por padrão. Ver `apps/api/.env.example`. |
+Diferente do nexus-odoo: aqui as migrations **são arquivos** em
+`apps/api/prisma/migrations/`. O entrypoint do container roda
+`prisma migrate deploy` no boot, então **toda migration commitada é aplicada
+automaticamente em produção** no primeiro container novo. Regra: gere a migration
+(`prisma migrate dev` no dev), **comite a pasta da migration**, e o deploy cuida
+do resto. Prefira mudanças aditivas/idempotentes; nunca DROP/rename sem plano.
 
-## Primeiro deploy (bootstrap)
+---
 
-1. **Merge do PR de infra na `main`** → o Actions builda e publica a imagem no GHCR.
-2. **Tornar o pacote GHCR público** (Packages → painel-celula → Package settings →
-   Change visibility → Public) — ou configurar o registry no Portainer.
-3. **Criar a stack `painel-celula` no Portainer** (Swarm): cole o conteúdo de
-   `docker-compose.production.example.yml` no editor da stack e preencha as
-   variáveis na aba **Environment** (`DB_PASSWORD`, `JWT_SECRET`, `ADMIN_EMAIL`,
-   `ADMIN_SENHA`, `ADMIN_NOME`, `DATABASE_URL`).
-   - Confirme que `entrypoints` e `certresolver` dos labels Traefik casam com o
-     seu Traefik (os mesmos nomes usados por nexus-odoo/nexus-insights).
-   - O entrypoint aplica as migrations e cria o admin automaticamente no boot.
-4. **DNS**: apontar `celula.nexusai360.com` para o IP da VPS (registro A). O
-   Traefik emite o certificado Let's Encrypt no primeiro acesso.
-5. A partir daí, todo push/merge na `main` redeploya sozinho via Shepherd.
+## 2. Como funciona (arquitetura em 1 minuto)
 
-## Verificação pós-deploy
+```
+git push / merge na main
+        │
+        ▼
+GitHub Actions ── build ─►  ghcr.io/nexusai360/painel-celula:latest  (+ :sha-XXXX)
+ (.github/workflows/build.yml — o job que importa)
+        │  (imagem nova no registry, privada)
+        ▼
+Shepherd (roda DENTRO da VPS, a cada ~10 min)
+        │  vê a :latest mudar → docker service update do painel-celula_app
+        ▼
+Traefik roteia celula.nexusai360.com → app:3000 (TLS Let's Encrypt)
+        │  no boot, o entrypoint roda: prisma migrate deploy + cria/garante admin
+        ▼
+Produção atualizada
+```
+
+- **Imagem única** (`docker/Dockerfile`, multi-stage, `node:24-alpine`, não-root,
+  porta 3000): a API Fastify serve a API **e** o front (`apps/web/dist`) na mesma
+  origem (topologia "serviço único", sem CORS).
+- **GitHub Actions só CONSTRÓI e PUBLICA** no GHCR. Não tente fazer o Actions
+  chamar a VPS para deployar — a borda da VPS bloqueia o IP do runner (HTTP 000).
+  O deploy é do Shepherd (dentro da VPS) ou do `npm run deploy` (da sua máquina).
+- **CI** (`.github/workflows/ci.yml`) roda lint/build/testes com um Postgres
+  limpo a cada push/PR. É o gate — mantenha verde.
+
+---
+
+## 3. Auto-deploy (Shepherd) — como está montado
+
+Reusa o serviço **`shepherd-nexus-odoo`** que já roda no Swarm (um Shepherd
+global serve todos os projetos). Ele observa o GHCR e atualiza **apenas** os
+serviços com o label **`com.nexus.autodeploy=true`**.
+
+- O `painel-celula_app` **tem esse label** (definido em `deploy.labels` do compose
+  de produção) → o Shepherd o atualiza sozinho quando a `:latest` muda.
+- `WITH_REGISTRY_AUTH=true` + a credencial do GHCR que já existe no nó
+  (`/root/.docker/config.json`, `docker login ghcr.io`) → o nó **consegue puxar a
+  imagem privada** da org. Por isso a imagem **não precisa ser pública**.
+- Nunca toca `db`/`redis` (não têm o label).
+
+---
+
+## 4. Deploy MANUAL / forçado (`npm run deploy`)
+
+`scripts/deploy.mjs` faz o mesmo que o Shepherd, sob demanda, da sua máquina:
+
+1. lê `PORTAINER_URL`/`PORTAINER_TOKEN`/`PORTAINER_ENDPOINT_ID` de `.env.deploy`
+   (gitignored);
+2. pega um token de pull do GHCR via `gh auth token` (imagem privada) e monta o
+   header `X-Registry-Auth`;
+3. faz `POST /api/endpoints/1/docker/services/{id}/update?version=N` com
+   `TaskTemplate.ForceUpdate++` → o Swarm re-puxa a `:latest`;
+4. acompanha a convergência e valida `https://celula.nexusai360.com/health`.
+
+> **NUNCA** use `/api/stacks/{id}/git/redeploy` (só serve para stack git-managed;
+> retorna HTTP 405 aqui). Sempre `/docker/services/{id}/update` com ForceUpdate.
+
+Fallback pela UI: Portainer → Stacks → `painel-celula` → **Update the stack** →
+marcar **"Re-pull image and redeploy"**.
+
+---
+
+## 5. Coordenadas de produção (parâmetros reais)
+
+| Item | Valor |
+|---|---|
+| Domínio | `celula.nexusai360.com` (DNS já aponta para a VPS via wildcard `*.nexusai360.com`) |
+| VPS | Hostinger `82.29.61.175`, Docker Swarm |
+| Portainer | `https://painel.nexusai360.com` · endpoint id **1** · swarmID em `.env.deploy` |
+| Stack | `painel-celula` (id **117**) · serviços `painel-celula_app`, `painel-celula_db` |
+| Registry | GHCR `ghcr.io/nexusai360/painel-celula` (**privado**) · registry id **1** no Portainer |
+| Rede Traefik | externa `rede_nexusAI` · entrypoint `websecure` · certresolver **`letsencryptresolver`** |
+| Credenciais | `PORTAINER_URL/TOKEN/ENDPOINT_ID`, `DB_PASSWORD`, `JWT_SECRET`, `ADMIN_*` — em `.env.deploy` (gitignored) e na aba Environment da stack no Portainer |
+
+O compose real de produção fica em `docker-compose.production.yml` (gitignored) e
+na definição da stack no Portainer. O template versionado é
+`docker-compose.production.example.yml`.
+
+---
+
+## 6. Variáveis de ambiente da stack (no Portainer)
+
+`DATABASE_URL` (Postgres da stack), `DB_PASSWORD`, `JWT_SECRET` (forte;
+`openssl rand -hex 48`), `NODE_ENV=production`, `TZ=America/Sao_Paulo`,
+`ADMIN_EMAIL`/`ADMIN_SENHA`/`ADMIN_NOME` (o entrypoint cria/garante o dono no
+boot, idempotente). `CORS_ORIGIN` não é necessário no modo serviço único.
+
+---
+
+## 7. Primeiro deploy do zero (bootstrap) — receita reutilizável
+
+1. Push na `main` → Actions builda e publica `ghcr.io/nexusai360/painel-celula:latest`.
+2. Criar a stack `painel-celula` no Portainer (Swarm): colar
+   `docker-compose.production.example.yml` no editor + preencher as env vars
+   (seção 6) na aba Environment.
+   - Os labels Traefik já usam `websecure` + `letsencryptresolver` + `rede_nexusAI`
+     (as convenções desta VPS). O `com.nexus.autodeploy=true` liga o Shepherd.
+3. **Pull da imagem privada no primeiro subir:** o nó puxa via a credencial do
+   GHCR que já tem (`/root/.docker/config.json`). Se um serviço ficar
+   `rejected: No such image`, force com `npm run deploy` (passa `X-Registry-Auth`).
+4. O entrypoint aplica as migrations e cria o admin automaticamente.
+5. A partir daqui, todo push na `main` redeploya sozinho (Shepherd).
+
+> A visibilidade de um pacote **de org** no GHCR **não** muda por API (o
+> endpoint `PATCH /orgs/.../packages/...` retorna 404). Não perca tempo tentando:
+> a imagem fica privada e o pull funciona pela credencial do nó / `X-Registry-Auth`.
+
+---
+
+## 8. Verificação e rollback
 
 ```bash
 curl -sI https://celula.nexusai360.com/        # 200, cert válido
-curl -s  https://celula.nexusai360.com/health  # healthcheck da API
+curl -s  https://celula.nexusai360.com/health  # {"status":"ok"}
+npm run deploy:status                           # imagem/versão do serviço + health
 ```
 
-## Redeploy manual (fallback, se o Shepherd estiver fora)
+- **Rollback:** deployar uma tag `:sha-XXXX` anterior (Portainer → serviço →
+  Update → trocar a imagem para a revisão anterior), ou reverter o commit e push.
 
-No Portainer: **Stacks → painel-celula → Update the stack → marcar
-"Re-pull image and redeploy"**. (Para stacks Swarm não-git, é
-`docker service update` com `ForceUpdate++`; **nunca** o endpoint
-`/api/stacks/{id}/git/redeploy`, que retorna 405 nesse caso.)
+---
 
-## Segurança / segredos
+## 9. Segurança
 
-- **Nenhum segredo vai para o Git.** Só `*.example` é versionado; o `.gitignore`
-  bloqueia `.env`, `.env.*`, `*.pem`, `*.key`, `docker-compose.production.yml`.
-- Os valores reais (senhas, `JWT_SECRET`) vivem **apenas** na aba Environment da
-  stack do Portainer — nunca no repositório.
-- `docker-compose.production.example.yml` é só um **template** com placeholders.
+- **Nenhum segredo no Git.** Só `*.example` é versionado. O `.gitignore` bloqueia
+  `.env`, `.env.*` (inclui `.env.deploy`), `docker-compose.production.yml`, chaves.
+- Segredos reais vivem em `.env.deploy` (local, para o `npm run deploy`) e na aba
+  Environment da stack no Portainer.
+- App: `@fastify/helmet` (CSP) + `@fastify/rate-limit` (global + login/registro).
+  Cadastro é **aberto com aprovação de admin** (conta nasce pendente; login só
+  após aprovação em `/app/usuarios`). E-mail transacional (confirmação/reset)
+  ainda **não** está ativo — pendente de configurar SMTP.
 
-## Checklist de produção
+---
 
-- [ ] Pacote GHCR público (ou registry configurado no Portainer).
-- [ ] Stack `painel-celula` criada no Portainer com todas as env vars.
-- [ ] `JWT_SECRET` forte e único (`openssl rand -hex 48`).
-- [ ] `DB_PASSWORD` forte.
-- [ ] `TZ=America/Sao_Paulo` e `NODE_ENV=production`.
-- [ ] Labels Traefik com `entrypoints`/`certresolver` corretos.
-- [ ] DNS `celula.nexusai360.com` → VPS, HTTPS ativo.
-- [ ] Serviço `app` na rede `rede_nexusAI` e com `com.nexus.autodeploy=true`.
-- [ ] Admin real criado (via `ADMIN_EMAIL`/`ADMIN_SENHA`), sem dados de demo.
+## 10. Troubleshooting (causas-raiz já resolvidas — não reinvestigar)
+
+- **`rejected: No such image` ao subir/atualizar:** o pull não autenticou.
+  Rode `npm run deploy` (manda `X-Registry-Auth` do `gh`); ou garanta o
+  `docker login ghcr.io` no nó. **Não** é preciso tornar a imagem pública.
+- **HTTP 405 no redeploy:** você usou `/api/stacks/{id}/git/redeploy` (só p/
+  git-managed). Use `/docker/services/{id}/update?version=N` com ForceUpdate.
+- **HTTP 404 ao tornar pacote público:** esperado para pacote de org via API.
+  Ignorar; a imagem fica privada e funciona.
+- **Deploy pelo runner do GitHub não conecta (HTTP 000):** a borda da VPS
+  bloqueia o runner. Por isso o deploy é do Shepherd / `npm run deploy`.
+- **Feature nova quebra por coluna faltando:** confirme que a migration foi
+  **commitada** em `apps/api/prisma/migrations/`; o `migrate deploy` do boot só
+  aplica arquivos de migration.

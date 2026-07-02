@@ -15,6 +15,8 @@
     "app:up": "docker compose --profile full up -d --build",
     "app:down": "docker compose --profile full down",
     "app:logs": "docker compose --profile full logs -f app",
+    "deploy": "node scripts/deploy.mjs",
+    "deploy:status": "node scripts/deploy.mjs --status",
     "prisma:migrate": "npm run prisma:migrate --workspace apps/api",
     "prisma:seed": "npm run prisma:seed --workspace apps/api"
   },
