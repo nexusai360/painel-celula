@@ -1,0 +1,25 @@
+# Nunca envie estes ao contexto de build do Docker.
+node_modules
+**/node_modules
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+!.env.*.example
+dist
+apps/web/dist
+build
+coverage
+*.tsbuildinfo
+.vite
+docker-compose*.yml
+docs
+*.md
+!DEPLOY.md
+.github
+.vscode
+.idea
+.DS_Store
+branches
+.agente

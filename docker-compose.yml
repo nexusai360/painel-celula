@@ -1,0 +1,47 @@
+# Stack de DESENVOLVIMENTO local.
+# - `npm run db:up` sobe só o Postgres (o fluxo normal roda API/front no host).
+# - `npm run app:up` (= `docker compose --profile full up -d --build`) sobe a app
+#   já em container, servindo API + front numa URL única:
+#       http://localhost:3200   ← PORTA LOCAL CANÔNICA deste projeto.
+#   (A app escuta 3000 dentro do container; publicamos em 3200 no host porque a
+#    3000 costuma estar ocupada por outro projeto.)
+#
+# Para PRODUÇÃO, veja docker-compose.production.example.yml — o compose real
+# (com labels Traefik e valores reais) vive apenas dentro do Portainer e NÃO
+# é versionado.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: icelula-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: icelula
+      POSTGRES_PASSWORD: icelula
+      POSTGRES_DB: icelula
+    ports:
+      - "5432:5432"
+    volumes:
+      - icelula_pgdata:/var/lib/postgresql/data
+
+  app:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: painel-celula:local
+    container_name: icelula-app
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: "postgresql://icelula:icelula@db:5432/icelula?schema=public"
+      JWT_SECRET: "dev-secret-troque-em-producao"
+      NODE_ENV: "production"
+      API_PORT: "3000"
+      HOST: "0.0.0.0"
+      TZ: "America/Sao_Paulo"
+    ports:
+      - "3200:3000"
+
+volumes:
+  icelula_pgdata:

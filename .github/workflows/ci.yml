@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: icelula
+          POSTGRES_PASSWORD: icelula
+          POSTGRES_DB: icelula
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U icelula"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: "postgresql://icelula:icelula@localhost:5432/icelula?schema=public"
+      JWT_SECRET: "ci-secret"
+      TZ: "America/Sao_Paulo"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install
+        run: npm ci
+
+      - name: Prisma generate
+        run: npm run prisma:generate --workspace apps/api
+
+      - name: Apply migrations
+        run: npm run prisma:deploy --workspace apps/api
+
+      - name: Build front
+        run: npm run build --workspace apps/web
+        env:
+          VITE_API_URL: ""
+
+      - name: Test
+        run: npm test

@@ -1,0 +1,50 @@
+# ── Dependências ─────────────────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Segredos / ambiente (NUNCA versionar) ────────────────────────────────
+# Só o *.example vai pro Git. Qualquer .env real fica de fora.
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+*.secret
+
+# ── Build / artefatos ────────────────────────────────────────────────────
+dist/
+build/
+apps/web/dist/
+*.tsbuildinfo
+coverage/
+.vite/
+
+# ── Compose de PRODUÇÃO (vive só no Portainer, contém labels/env reais) ───
+docker-compose.production.yml
+docker-compose.prod.yml
+docker-compose.override.yml
+stack.production.yml
+stack.yml
+!docker-compose.production.example.yml
+
+# ── Logs / temporários ───────────────────────────────────────────────────
+*.log
+npm-debug.log*
+.DS_Store
+.cache/
+tmp/
+
+# ── Editores / IDE ───────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+
+# ── Worktrees do protocolo multi-agente ──────────────────────────────────
+branches/
+.agente/
+.agente-handoff.md

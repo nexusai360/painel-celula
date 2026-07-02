@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Papel {
+  MEMBRO
+  LIDER
+  ADMIN
+}
+
+enum EncontroStatus {
+  AGENDADO
+  REALIZADO
+  CANCELADO
+}
+
+enum PedidoStatus {
+  ATIVO
+  ATENDIDO
+}
+
+enum TestemunhoStatus {
+  PENDENTE
+  CONCLUIDO
+}
+
+model User {
+  id           String    @id @default(cuid())
+  nome         String
+  email        String    @unique
+  senhaHash    String?
+  papel        Papel     @default(MEMBRO)
+  celula       Celula?   @relation("MembrosDaCelula", fields: [celulaId], references: [id])
+  celulaId     String?
+  ativo        Boolean   @default(true)
+  ultimoAcesso DateTime?
+  criadoEm     DateTime  @default(now())
+  avatar       String?   @db.Text
+  whatsapp     String?
+
+  googleSub             String?  @unique
+  googleRefreshTokenEnc String?
+  googleCalendarId      String?
+  googleConectado       Boolean  @default(false)
+  googleEventos         GoogleEventoSync[]
+
+  celulaLiderada Celula?         @relation("LiderDaCelula")
+  presencas      Presenca[]
+  pedidos        PedidoOracao[]
+  testemunhos    Testemunho[]
+}
+
+model Celula {
+  id                   String   @id @default(cuid())
+  nome                 String
+  descricao            String?
+  qrToken              String   @unique
+  diaSemana            Int      // 0=domingo ... 6=sábado
+  frequenciaDias       Int      // ex: 7, 14
+  dataPrimeiroEncontro DateTime
+  ativa                Boolean  @default(true)
+  criadoEm             DateTime @default(now())
+
+  lider     User?   @relation("LiderDaCelula", fields: [liderId], references: [id])
+  liderId   String? @unique
+
+  membros     User[]         @relation("MembrosDaCelula")
+  encontros   Encontro[]
+  pedidos     PedidoOracao[]
+  testemunhos Testemunho[]
+}
+
+model Encontro {
+  id         String         @id @default(cuid())
+  celula     Celula         @relation(fields: [celulaId], references: [id], onDelete: Cascade)
+  celulaId   String
+  data       DateTime
+  status     EncontroStatus @default(AGENDADO)
+  observacao String?
+  criadoEm   DateTime       @default(now())
+
+  presencas     Presenca[]
+  googleEventos GoogleEventoSync[]
+
+  @@unique([celulaId, data])
+}
+
+model Presenca {
+  id         String   @id @default(cuid())
+  encontro   Encontro @relation(fields: [encontroId], references: [id], onDelete: Cascade)
+  encontroId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  marcadaEm  DateTime @default(now())
+
+  @@unique([encontroId, userId])
+}
+
+model PedidoOracao {
+  id           String       @id @default(cuid())
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  celula       Celula?      @relation(fields: [celulaId], references: [id], onDelete: SetNull)
+  celulaId     String?
+  titulo       String
+  detalhes     String?
+  status       PedidoStatus @default(ATIVO)
+  criadoEm     DateTime     @default(now())
+  atualizadoEm DateTime     @updatedAt
+  testemunho   Testemunho?
+}
+
+model Testemunho {
+  id          String           @id @default(cuid())
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  celula      Celula?          @relation(fields: [celulaId], references: [id], onDelete: SetNull)
+  celulaId    String?
+  pedido      PedidoOracao?    @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
+  pedidoId    String?          @unique
+  titulo      String
+  status      TestemunhoStatus @default(PENDENTE)
+  criadoEm    DateTime         @default(now())
+  concluidoEm DateTime?
+}
+
+model GoogleEventoSync {
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  encontro      Encontro @relation(fields: [encontroId], references: [id], onDelete: Cascade)
+  encontroId    String
+  googleEventId String
+  criadoEm      DateTime @default(now())
+
+  @@unique([userId, encontroId])
+}

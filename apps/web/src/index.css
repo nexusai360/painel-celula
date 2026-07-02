@@ -1,0 +1,586 @@
+@import 'tailwindcss';
+
+/* Estratégia de dark mode por classe .dark no <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---- Tokens de marca e tema (CSS variables) ---- */
+:root {
+  /* Marca — cinza prateado (light: ardósia média p/ contraste em fundo claro) */
+  --brand: #64748b;
+  --brand-hover: #515e70;
+  --brand-soft: #94a3b8;
+  --on-brand: #ffffff;
+  /* Degradê metálico claro (sem preto) */
+  --brand-grad: linear-gradient(135deg, #6b7280 0%, #515e70 100%);
+
+  /* Light mode */
+  --background: #ffffff;
+  --surface: #f8f8f8;
+  --card: #ffffff;
+  --border: #ececec;
+  --text: #1a1a1a;
+  --text-muted: #666666;
+
+  /* Semânticos de status */
+  --success: #2e9e5b;
+  --danger: #dc2626;
+
+  --radius-card: 16px;
+}
+
+.dark {
+  /* Dark mode — grafite escuro (quase preto, levemente acinzentado) */
+  --background: #141417;
+  --surface: #1c1c21;
+  --card: #212127;
+  --border: #2f2f38;
+  --text: #ffffff;
+  --text-muted: #b4b4be;
+
+  --success: #43c478;
+  --danger: #f06a6a;
+
+  /* Marca — prateado claro no escuro (texto escuro sobre a marca) */
+  --brand: #b9c1cd;
+  --brand-hover: #a6afbd;
+  --brand-soft: #7e8895;
+  --on-brand: #1e222b;
+  /* Degradê metálico claro, sem preto */
+  --brand-grad: linear-gradient(135deg, #dfe4ea 0%, #adb7c4 100%);
+}
+
+/* Mapeia os tokens para utilitários do Tailwind (bg-background, text-text, etc.) */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-on-brand: var(--on-brand);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Sora', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 16px;
+}
+
+/* Superfícies principais com o degradê metálico da marca */
+.brand-grad {
+  background-image: var(--brand-grad);
+}
+.brand-grad:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--background);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+  /* Respeita usuários que pedem menos movimento */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* =====================================================
+   AnimatedCheck — keyframes e estilos
+   ===================================================== */
+
+@keyframes desenhar-check {
+  from { stroke-dashoffset: 40; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes crescer-circulo {
+  from { transform: scale(0); opacity: 0.8; }
+  to   { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes particula {
+  0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% {
+    transform:
+      translate(
+        calc(cos(calc(var(--i) * 45deg)) * 28px),
+        calc(sin(calc(var(--i) * 45deg)) * 28px)
+      )
+      scale(0);
+    opacity: 0;
+  }
+}
+
+.animated-check-root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.animated-check-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 50%;
+  outline-offset: 3px;
+  transition: transform 0.15s ease;
+}
+
+.animated-check-btn:hover:not(.animated-check-btn--disabled) {
+  transform: scale(1.08);
+}
+
+.animated-check-btn:active:not(.animated-check-btn--disabled) {
+  transform: scale(0.94);
+}
+
+.animated-check-btn--disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.animated-check-svg {
+  width: 48px;
+  height: 48px;
+  display: block;
+}
+
+.animated-check-circle-bg {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 2;
+  transition: fill 0.2s ease, stroke 0.2s ease;
+}
+
+.animated-check-btn--marcado .animated-check-circle-bg {
+  fill: var(--success);
+  stroke: var(--success);
+}
+
+.animated-check-polyline {
+  stroke: var(--text-muted);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  transition: stroke 0.2s ease;
+}
+
+.animated-check-polyline--marcado {
+  stroke: #ffffff;
+  stroke-dashoffset: 0;
+  animation: desenhar-check 0.3s ease forwards;
+}
+
+/* Overlay círculo que expande e desvanece ao marcar */
+.animated-check-circulo {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--success);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.animated-check-btn--marcado .animated-check-circulo {
+  animation: crescer-circulo 0.4s ease forwards;
+}
+
+/* Partículas */
+.animated-check-particulas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.animated-check-particula {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin: -3px 0 0 -3px;
+  background: var(--brand);
+  animation: particula 0.4s ease forwards;
+}
+
+.animated-check-particula:nth-child(2n) {
+  background: var(--success);
+  width: 5px;
+  height: 5px;
+}
+
+/* Reduced-motion: sem overlay nem partículas */
+@media (prefers-reduced-motion: reduce) {
+  .animated-check-circulo,
+  .animated-check-particulas {
+    display: none !important;
+  }
+  .animated-check-polyline--marcado {
+    animation: none !important;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* =====================================================
+   CheckInHero — card imersivo de check-in da próxima reunião
+   ===================================================== */
+
+.check-in-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  border: 1.5px solid var(--border);
+  background-color: var(--card);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 1px 3px 0 color-mix(in srgb, var(--text) 7%, transparent), 0 1px 2px -1px color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+/* Gradiente radial sutil — presença de marca sempre visível */
+.check-in-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 90% 55% at 10% 10%,
+    color-mix(in srgb, var(--brand) 5%, transparent),
+    transparent 65%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Garante que filhos fiquem acima do ::before */
+.check-in-hero > * {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+/* Estado OPEN: borda de marca mais visível + gradiente mais intenso */
+.check-in-hero--open {
+  border-color: color-mix(in srgb, var(--brand) 38%, transparent);
+  box-shadow:
+    0 1px 3px 0 color-mix(in srgb, var(--text) 7%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--brand) 12%, transparent);
+}
+
+.check-in-hero--open::before {
+  background: radial-gradient(
+    ellipse 90% 55% at 10% 10%,
+    color-mix(in srgb, var(--brand) 10%, transparent),
+    transparent 65%
+  );
+}
+
+/* Estado CONFIRMED: borda success + gradiente verde sutil */
+.check-in-hero--confirmed {
+  border-color: color-mix(in srgb, var(--success) 38%, transparent);
+  box-shadow:
+    0 1px 3px 0 color-mix(in srgb, var(--text) 7%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.check-in-hero--confirmed::before {
+  background: radial-gradient(
+    ellipse 90% 55% at 90% 10%,
+    color-mix(in srgb, var(--success) 10%, transparent),
+    transparent 65%
+  );
+}
+
+/* Estado CANCELLED: opacidade reduzida */
+.check-in-hero--cancelled {
+  opacity: 0.72;
+}
+
+/* Estado VAZIO (sem encontro) */
+.check-in-hero--vazio {
+  min-height: 200px;
+  justify-content: center;
+  padding: 3rem 2rem;
+}
+
+/* ── Sub-elementos do CheckInHero ────────────────────────── */
+
+.check-in-hero__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  text-align: left;
+  margin-bottom: 1.5rem;
+  width: 100%;
+}
+
+/* Nome da célula — pequeno, muted, uppercase */
+.check-in-hero__celula {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+  line-height: 1;
+}
+
+/* Dia relativo — "Hoje", "Amanhã", etc. */
+.check-in-hero__label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--brand);
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+
+.check-in-hero__data {
+  margin-top: 0.15rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+/* Badge de presentes */
+.check-in-hero__presentes {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 0.25rem 0.625rem;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Horário em destaque — figura tabular, display bold */
+.check-in-hero__time {
+  font-family: var(--font-display);
+  font-size: clamp(3.25rem, 14vw, 5.25rem);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+  color: var(--text);
+  margin-bottom: 1.75rem;
+  text-align: center;
+}
+
+/* Área de ação */
+.check-in-hero__action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+}
+
+/* Texto de status (OPEN / CONFIRMED) */
+.check-in-hero__status {
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* AnimatedCheck maior no contexto hero */
+.check-in-hero .animated-check-btn {
+  width: 72px;
+  height: 72px;
+}
+
+.check-in-hero .animated-check-svg {
+  width: 64px;
+  height: 64px;
+}
+
+/* Pílula de LOCKED */
+.check-in-hero__lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Contagem regressiva LOCKED < 24h */
+.check-in-hero__countdown {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Badge genérico de estado (CANCELLED) */
+.check-in-hero__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.9rem;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.check-in-hero__badge--cancelled {
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  color: var(--text-muted);
+}
+
+/* =====================================================
+   MinhaFrequencia — resumo de frequência habit-tracker
+   ===================================================== */
+
+.minha-frequencia {
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background-color: var(--card);
+  padding: 1.25rem 1.5rem;
+}
+
+.minha-frequencia__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.1rem;
+}
+
+.minha-frequencia__titulo {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.minha-frequencia__resumo {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* Timeline horizontal: bolinhas ligadas por uma linha */
+.minha-frequencia__timeline {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-top: 0.25rem;
+}
+
+/* Linha de conexão atrás das bolinhas */
+.minha-frequencia__timeline::before {
+  content: '';
+  position: absolute;
+  top: calc(0.25rem + 18px); /* centro vertical das bolinhas (36px/2) */
+  left: 18px;
+  right: 18px;
+  height: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.mf-dot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 1 0 auto;
+  min-width: 44px;
+}
+
+.mf-dot__circulo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 2px solid var(--border);
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.mf-dot__dia {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* Presente — preenchido com a cor de sucesso + check branco */
+.mf-dot--presente .mf-dot__circulo {
+  background: var(--success);
+  border-color: var(--success);
+  color: #ffffff;
+}
+.mf-dot--presente .mf-dot__dia {
+  color: var(--text);
+}
+
+/* Faltei — contorno de aviso com × */
+.mf-dot--falta .mf-dot__circulo {
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  color: color-mix(in srgb, var(--danger) 85%, var(--text-muted));
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+/* Futuro — contorno tênue da marca */
+.mf-dot--futuro .mf-dot__circulo {
+  border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  border-style: dashed;
+}
+
+/* Cancelada — apagada */
+.mf-dot--cancelado .mf-dot__circulo {
+  opacity: 0.5;
+}
+.mf-dot--cancelado .mf-dot__dia {
+  text-decoration: line-through;
+}

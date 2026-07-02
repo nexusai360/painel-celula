@@ -1,0 +1,32 @@
+{
+  "name": "@icelula/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@icelula/shared": "*",
+    "axios": "^1.13.2",
+    "framer-motion": "^12.42.2",
+    "lucide-react": "^0.469.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-hook-form": "^7.70.0",
+    "react-router-dom": "^7.11.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "tailwindcss": "^4.1.0",
+    "vite": "^7.2.4",
+    "vitest": "^3.2.6"
+  }
+}

@@ -1,0 +1,62 @@
+import { registerSchema, loginSchema } from '@icelula/shared'
+import { prisma } from '../prisma.js'
+import { hashSenha, verificarSenha } from '../lib/password.js'
+import { requireRole } from '../lib/roles.js'
+import { COM_CELULA, comCelula } from '../lib/usuarios.js'
+
+function assinarToken(app, user) {
+  return app.jwt.sign({ id: user.id, papel: user.papel, celulaId: user.celulaId })
+}
+
+export async function authRoutes(app) {
+  app.post('/auth/register', async (request, reply) => {
+    const parsed = registerSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
+    }
+    const { nome, email, senha, qrToken } = parsed.data
+
+    const existente = await prisma.user.findUnique({ where: { email } })
+    if (existente) return reply.code(409).send({ erro: 'E-mail já cadastrado' })
+
+    let celulaId = null
+    if (qrToken) {
+      const celula = await prisma.celula.findUnique({ where: { qrToken } })
+      if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
+      celulaId = celula.id
+    }
+
+    const user = await prisma.user.create({
+      data: { nome, email, senhaHash: await hashSenha(senha), papel: 'MEMBRO', celulaId },
+      ...COM_CELULA
+    })
+    return reply.code(201).send({ token: assinarToken(app, user), usuario: comCelula(user) })
+  })
+
+  app.post('/auth/login', async (request, reply) => {
+    const parsed = loginSchema.safeParse(request.body)
+    if (!parsed.success) return reply.code(400).send({ erro: 'Dados inválidos' })
+    const { email, senha } = parsed.data
+
+    const user = await prisma.user.findUnique({ where: { email } })
+    if (!user) return reply.code(401).send({ erro: 'Credenciais inválidas' })
+    if (!user.ativo) return reply.code(403).send({ erro: 'Usuário desativado' })
+    if (!user.senhaHash) {
+      return reply.code(401).send({ erro: 'Esta conta usa login com Google. Entre com Google.' })
+    }
+    if (!(await verificarSenha(senha, user.senhaHash))) {
+      return reply.code(401).send({ erro: 'Credenciais inválidas' })
+    }
+
+    const atualizado = await prisma.user.update({
+      where: { id: user.id }, data: { ultimoAcesso: new Date() }, ...COM_CELULA
+    })
+    return reply.send({ token: assinarToken(app, atualizado), usuario: comCelula(atualizado) })
+  })
+
+  app.get('/auth/me', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+    const user = await prisma.user.findUnique({ where: { id: request.usuario.id }, ...COM_CELULA })
+    if (!user) return reply.code(404).send({ erro: 'Usuário não encontrado' })
+    return reply.send({ usuario: comCelula(user) })
+  })
+}
