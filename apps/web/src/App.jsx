@@ -7,6 +7,9 @@ import { ProtectedRoute } from './routes/ProtectedRoute.jsx'
 import { ehAdmin, PAPEL_RANK } from './lib/papeis.js'
 import { AppLayout } from './components/AppLayout.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
+import { AdminLayout } from './pages/admin/AdminLayout.jsx'
+import AdminUsuarios from './pages/admin/AdminUsuarios.jsx'
+import AdminAvisos from './pages/admin/AdminAvisos.jsx'
 import QrLanding from './pages/QrLanding.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
@@ -87,6 +90,12 @@ export default function App() {
               <Route path="/app/perfil" element={<Perfil />} />
               <Route path="/app/celulas" element={<Celulas />} />
               <Route path="/app/usuarios" element={<SoGestor><Usuarios /></SoGestor>} />
+              {/* Área de Administração (route-group; rail lateral + sub-nav) */}
+              <Route path="/app/admin" element={<SoAdmin><AdminLayout /></SoAdmin>}>
+                <Route path="usuarios" element={<AdminUsuarios />} />
+                <Route path="celulas" element={<Celulas />} />
+                <Route path="avisos" element={<AdminAvisos />} />
+              </Route>
               <Route path="/app/celula/:id" element={<CelulaDetalhe />} />
               <Route path="/app/pedidos" element={<MeusPedidos />} />
               <Route path="/app/pedidos/novo" element={<PedidoForm />} />
