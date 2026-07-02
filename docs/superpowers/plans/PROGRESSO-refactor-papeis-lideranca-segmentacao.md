@@ -32,7 +32,17 @@
   - [x] banner.js CRUD segmentado + notificacoes.js leitura por item + marcar-tudo
   - [x] frontend: SeletorPublico (3 eixos), AdminAvisos (banner CRUD+expiração / notificação), BannerBar carrossel, NotificacoesSino modal+por-item, api.js
   - Nota: composer de notificação hoje vive no admin (AdminAvisos, SoAdmin). Backend já aceita líder enviar; expor UI de notificação para líderes ficou como follow-up menor.
-- **⏳ TODAS AS 3 FASES IMPLEMENTADAS E VALIDADAS E2E LOCALMENTE.**
+- **✅ TODAS AS 3 FASES IMPLEMENTADAS E VALIDADAS E2E LOCALMENTE.**
+- **🚀 DEPLOY DISPARADO** (push `228a394` → build.yml ✓ imagem no GHCR → Shepherd auto-deploy em prod
+  `https://celula.nexusai360.com`). Migrações validadas em DB FRESCO (17 aplicam limpas). Convergência
+  em rolling update; poll aguardando login retornar `nivelAcesso` estável. Prod tem 5 usuários reais
+  (migração backfilla papel→nível/qualif). Falta: confirmar convergência total + avisar o dono.
+- **⚠️ DÉBITO DE TESTE (CI vermelho, NÃO bloqueia o deploy — build.yml é independente do ci.yml):**
+  os testes de rota da API (`celulas/usuarios/presenca/encontros/testemunhos/googleAuth.test.js` +
+  `calendarSync/encontros.service` — setup cria user com `papel` e célula com `liderId`, assina JWT com
+  `papel`) precisam migrar para o novo modelo (nível/qualif; junção `lideres`). RODAM LOCAL contra o docker
+  DB: `DATABASE_URL="postgresql://icelula:icelula@localhost:5432/testfresh?schema=public" npx vitest run apps/api`.
+  Unit puros já verdes (escopo/roles/qualificacao/etc). Este é o próximo passo p/ deixar o CI verde.
 - **⚠️ PRÉ-DEPLOY OBRIGATÓRIO:** os testes de rota da API (celulas/usuarios/presenca/encontros/testemunhos/escopo.test.js) referenciam `liderId`/`papel` — quebrados pelo refactor A+B. Precisam ser reescritos para o novo modelo ANTES do push/deploy (rodam no CI). Passe dedicado.
 - **FASE C** — Segmentação (banner carrossel/expiração + notificação alvo 3 eixos + leitura por item) — (após B)
 - **DEPLOY** — push na `main` → CI → GHCR → Shepherd; acompanhar até prod no ar; avisar o dono.
