@@ -26,14 +26,15 @@ beforeAll(async () => {
   })
   celulaId = celula.id
 
-  // Cria usuário inativo para teste de bloqueio
+  // Cria usuário inativo (mas aprovado) para testar o bloqueio de "desativado"
   await prisma.user.create({
     data: {
       nome: 'Inativo Teste',
       email: inativoEmail,
       senhaHash: await hashSenha('senha123'),
       papel: 'MEMBRO',
-      ativo: false
+      ativo: false,
+      aprovado: true
     }
   })
 })
@@ -54,17 +55,19 @@ describe('auth', () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it('cadastra um membro sem qrToken (201) e não vaza senhaHash', async () => {
+  it('cadastra um membro sem qrToken (201) como PENDENTE, sem token', async () => {
     const res = await app.inject({
       method: 'POST', url: '/auth/register',
       payload: { nome: 'Teste', email, senha: '123456' }
     })
     expect(res.statusCode).toBe(201)
     const body = res.json()
-    expect(body.token).toBeTypeOf('string')
-    expect(body.usuario.email).toBe(email)
-    expect(body.usuario.papel).toBe('MEMBRO')
-    expect(body.usuario.senhaHash).toBeUndefined()
+    expect(body.pendente).toBe(true)
+    expect(body.token).toBeUndefined()
+    // A conta é criada como MEMBRO e ainda não aprovada.
+    const criado = await prisma.user.findUnique({ where: { email } })
+    expect(criado.papel).toBe('MEMBRO')
+    expect(criado.aprovado).toBe(false)
   })
 
   it('rejeita e-mail duplicado (409)', async () => {
@@ -81,9 +84,11 @@ describe('auth', () => {
       payload: { nome: 'Membro QR', email: membroEmail, senha: 'senha123', qrToken: `qr-test-${sufixo}` }
     })
     expect(res.statusCode).toBe(201)
-    const body = res.json()
-    expect(body.usuario.celulaId).toBe(celulaId)
-    expect(body.usuario.senhaHash).toBeUndefined()
+    expect(res.json().pendente).toBe(true)
+    // Vínculo com a célula é gravado mesmo estando pendente de aprovação.
+    const criado = await prisma.user.findUnique({ where: { email: membroEmail } })
+    expect(criado.celulaId).toBe(celulaId)
+    expect(criado.aprovado).toBe(false)
   })
 
   it('rejeita qrToken desconhecido (404)', async () => {
@@ -95,7 +100,18 @@ describe('auth', () => {
     expect(res.json()).toEqual({ erro: 'Célula não encontrada' })
   })
 
-  it('faz login (200) sem vazar senhaHash e acessa /auth/me com o token', async () => {
+  it('bloqueia login de conta ainda não aprovada (403)', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/auth/login',
+      payload: { email, senha: '123456' }
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().pendente).toBe(true)
+  })
+
+  it('faz login (200) após aprovação e acessa /auth/me com o token', async () => {
+    // Um admin aprova a conta antes do login.
+    await prisma.user.update({ where: { email }, data: { aprovado: true } })
     const login = await app.inject({
       method: 'POST', url: '/auth/login',
       payload: { email, senha: '123456' }

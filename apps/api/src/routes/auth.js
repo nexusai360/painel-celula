@@ -9,7 +9,7 @@ function assinarToken(app, user) {
 }
 
 export async function authRoutes(app) {
-  app.post('/auth/register', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.post('/auth/register', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parsed = registerSchema.safeParse(request.body)
     if (!parsed.success) {
       return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
@@ -37,7 +37,7 @@ export async function authRoutes(app) {
     })
   })
 
-  app.post('/auth/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
+  app.post('/auth/login', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body)
     if (!parsed.success) return reply.code(400).send({ erro: 'Dados inválidos' })
     const { email, senha } = parsed.data
