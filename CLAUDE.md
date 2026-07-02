@@ -48,7 +48,10 @@ v1  ──►  REVIEW 1 (perícia profunda e completa da v1: caçar erro, lacuna
 
 - Fluxo completo: `brainstorming → spec(v1→R1→v2→R2→v3) → writing-plans(v1→R1→v2→R2→v3)
   → execução TDD → testes verdes → verificação/E2E → commit`.
-- UI/frontend: **`ui-ux-pro-max` é obrigatório** e feito **inline** (nunca delegado a subagente).
+- UI/frontend: **SEMPRE invocar a skill `/ui-ux-pro-max:ui-ux-pro-max`** antes de qualquer
+  trabalho de frontend (layout, componente, tela, estilo, design). É **obrigatório e
+  inegociável em TODA tarefa de frontend**, e feito **inline** na sessão principal
+  (nunca delegado a subagente). Regra durável do dono.
 - Modelo **sempre Opus**, inclusive em todo subagente/workflow.
 - **Verdade contra o dado real:** confrontar premissas com `SELECT` no banco real antes de
   cravá-las na spec; E2E contra o backend real antes de declarar pronto.
