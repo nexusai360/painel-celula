@@ -13,7 +13,7 @@ export function Checkbox({ checked = false, onChange, label, id, descricao, disa
           checked={checked}
           disabled={disabled}
           onChange={(e) => onChange?.(e.target.checked)}
-          className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-border bg-card transition-colors checked:border-transparent checked:brand-grad disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border-2 border-text-muted/50 bg-transparent transition-colors checked:border-brand checked:bg-brand disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         />
         <Check className="pointer-events-none absolute h-3.5 w-3.5 text-on-brand opacity-0 peer-checked:opacity-100" aria-hidden="true" />
       </span>

@@ -58,11 +58,11 @@ function Cabecalho() {
           </button>
         }
       >
-        <div className="w-72 space-y-2 p-2">
+        <div className="w-80 space-y-2.5 p-2">
           {LEGENDA.map((n) => (
-            <div key={n.papel} className="flex items-start gap-2">
-              <RoleBadge papel={n.papel} />
-              <span className="text-xs text-text-muted">{n.desc}</span>
+            <div key={n.papel} className="grid grid-cols-[7rem_1fr] items-center gap-2.5">
+              <RoleBadge papel={n.papel} className="justify-self-start whitespace-nowrap" />
+              <span className="text-xs leading-snug text-text-muted">{n.desc}</span>
             </div>
           ))}
         </div>

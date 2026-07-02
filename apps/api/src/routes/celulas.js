@@ -48,20 +48,16 @@ export function dataUtcDaString(s) {
   return new Date(Date.UTC(y, mo - 1, d, hh, mi))
 }
 
-const celulaSchema = z
-  .object({
-    nome: z.string().min(1),
-    descricao: z.string().optional(),
-    diaSemana: z.coerce.number().int().min(0).max(6),
-    frequenciaDias: frequenciaValida,
-    dataPrimeiroEncontro: z.string().regex(DATA_HORA, 'Data/hora inválida'),
-    liderId: z.string().optional(),
-    ...enderecoFields
-  })
-  .refine((d) => d.diaSemana === weekdayDaString(d.dataPrimeiroEncontro), {
-    message: 'O dia da semana não corresponde à data do primeiro encontro',
-    path: ['diaSemana']
-  })
+// O dia da semana é SEMPRE derivado da data no handler — nunca validado/rejeitado.
+const celulaSchema = z.object({
+  nome: z.string().min(1),
+  descricao: z.string().optional(),
+  diaSemana: z.coerce.number().int().min(0).max(6).optional(),
+  frequenciaDias: frequenciaValida,
+  dataPrimeiroEncontro: z.string().regex(DATA_HORA, 'Data/hora inválida'),
+  liderId: z.string().optional(),
+  ...enderecoFields
+})
 
 const updateCelulaSchema = z.object({
   nome: z.string().min(1).optional(),
@@ -93,8 +89,9 @@ export async function celulaRoutes(app) {
     if (!parsed.success) {
       return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
     }
-    const { nome, descricao, diaSemana, frequenciaDias, liderId } = parsed.data
-    // Data armazenada UTC-pinada a partir do wall-clock digitado (preserva o dia/hora).
+    const { nome, descricao, frequenciaDias, liderId } = parsed.data
+    // Dia da semana DERIVADO da data (nunca falha por mismatch) + data UTC-pinada.
+    const diaSemana = weekdayDaString(parsed.data.dataPrimeiroEncontro)
     const dataPrimeiroEncontro = dataUtcDaString(parsed.data.dataPrimeiroEncontro)
     const endereco = Object.fromEntries(
       CAMPOS_ENDERECO.filter((k) => parsed.data[k] !== undefined).map((k) => [k, parsed.data[k]])

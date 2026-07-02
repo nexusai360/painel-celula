@@ -107,7 +107,7 @@ export default function Perfil() {
               <Input id="whatsapp" label="WhatsApp" type="tel" placeholder="(62) 99999-9999" autoComplete="tel" inputMode="tel" error={errors.whatsapp?.message} {...register('whatsapp')} />
               <div>
                 <Input id="dataNascimento" label="Data de nascimento" type="date" error={errors.dataNascimento?.message} {...register('dataNascimento')} />
-                <p className="mt-1.5 text-xs text-text-muted">Pra lembrarmos de orar e comemorar com você.</p>
+                <p className="mt-1.5 text-xs text-text-muted">Pra te dar os parabéns e orar pela sua vida.</p>
               </div>
               <div>
                 <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-text">E-mail</label>
