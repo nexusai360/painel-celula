@@ -84,13 +84,11 @@ export function ConjugeSecao() {
               Convite enviado para <span className="font-medium text-text">{estado.enviada.alvo?.nome || estado.enviada.alvo?.email}</span>. Aguardando confirmação.
             </p>
           ) : (
-            <form onSubmit={convidar} className="flex items-end gap-2">
-              <div className="flex-1">
-                <Input id="conjuge-email" label="E-mail do seu cônjuge" type="email" placeholder="conjuge@exemplo.com"
-                  value={email} onChange={(e) => setEmail(e.target.value)} />
-              </div>
-              <Button type="submit" loading={ocupado} className="w-auto px-4">Convidar</Button>
-            </form>
+            <div className="space-y-3">
+              <Input id="conjuge-email" label="E-mail do seu cônjuge" type="email" placeholder="conjuge@exemplo.com"
+                value={email} onChange={(e) => setEmail(e.target.value)} />
+              <Button type="button" onClick={convidar} loading={ocupado} disabled={!email.trim()} className="w-auto px-6">Convidar</Button>
+            </div>
           )}
           <p className="mt-1.5 text-xs text-text-muted">A outra pessoa precisa confirmar o vínculo.</p>
         </>

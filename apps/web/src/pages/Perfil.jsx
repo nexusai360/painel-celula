@@ -80,13 +80,12 @@ export default function Perfil() {
       <div className="mx-auto max-w-2xl space-y-5">
 
         {/* ── Header do perfil: avatar + identidade (não é formulário) ── */}
-        <div className="overflow-hidden rounded-[var(--radius-card)] border border-border bg-card">
-          <div className="chrome h-16 w-full" aria-hidden="true" />
-          <div className="flex flex-col items-center gap-3 px-6 pb-6 sm:flex-row sm:items-end sm:gap-5">
-            <div className="-mt-10 shrink-0">
+        <div className="rounded-[var(--radius-card)] border border-border bg-card p-6">
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-5">
+            <div className="shrink-0">
               <AvatarUpload value={avatarUrl} nome={usuario?.nome} onChange={setAvatarUrl} />
             </div>
-            <div className="min-w-0 flex-1 text-center sm:pb-1 sm:text-left">
+            <div className="min-w-0 flex-1 text-center sm:text-left">
               <h1 className="font-display text-xl font-bold text-text">{usuario?.nome}</h1>
               <p className="truncate text-sm text-text-muted">{usuario?.email}</p>
               <div className="mt-2 flex justify-center sm:justify-start">
