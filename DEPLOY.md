@@ -48,9 +48,13 @@ automaticamente pelo entrypoint no boot do container novo.
 
 - **GHCR** — `ghcr.io/nexusai360/painel-celula`
 - Tags: `:latest` e `:sha-<git sha>` (a `:sha` permite rollback)
-- Auth: `GITHUB_TOKEN` embutido do Actions (`packages: write`). Sem PAT externo.
-- Torne o pacote **público** no GHCR (ou configure o registry GHCR no Portainer
-  se preferir mantê-lo privado).
+- Auth de push: `GITHUB_TOKEN` embutido do Actions (`packages: write`). Sem PAT externo.
+- O pacote é **privado** (org `nexusai360`, igual a nexus-odoo/nexus-nfe). O pull
+  no Swarm usa a credencial de registry do nó (`docker login ghcr.io`) — a mesma
+  que já serve os projetos irmãos. Não precisa ser público.
+- No primeiro deploy, o serviço foi criado via API do Portainer e o pull inicial
+  foi forçado com `X-Registry-Auth` (token com `read:packages`). Depois disso o
+  Shepherd cuida sozinho.
 
 ## Variáveis de ambiente (definidas na stack do Portainer)
 

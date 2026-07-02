@@ -1,83 +1,100 @@
 # ═════════════════════════════════════════════════════════════════════════
-# EXEMPLO do compose de PRODUÇÃO (Docker Swarm / Portainer).
+# EXEMPLO do compose de PRODUÇÃO (Docker Swarm / Portainer) — stack `painel-celula`.
 #
-# Este arquivo é um TEMPLATE — copie o conteúdo para a stack `painel-celula`
-# no Portainer e preencha as variáveis na aba "Environment" da stack.
-# O compose REAL (docker-compose.production.yml) NÃO é versionado: ele vive
-# apenas dentro do Portainer, pois carrega os valores reais.
+# Espelha o compose REAL usado na stack em produção (o real,
+# docker-compose.production.yml, é gitignored e vive no Portainer).
+# Este arquivo é o TEMPLATE versionado — valores reais vão na aba
+# "Environment" da stack no Portainer (DB_PASSWORD, JWT_SECRET, ADMIN_*, DATABASE_URL).
 #
-# Pré-requisitos na VPS (já existentes para nexus-odoo / nexus-insights):
-#   • Traefik com resolver Let's Encrypt e a rede externa `rede_nexusAI`.
-#   • Serviço Shepherd observando `label=com.nexus.autodeploy=true` (auto-deploy).
-#   • Registro GHCR autenticado no nó (docker login ghcr.io) — imagem pode ser
-#     pública; se privada, configure o registry no Portainer.
+# Convenções REAIS desta VPS (conferidas nos serviços irmãos nexus-nfe/blueprint):
+#   • rede externa do Traefik: `rede_nexusAI`
+#   • entrypoint HTTPS: `websecure`   |  HTTP: `web`
+#   • certresolver Let's Encrypt: `letsencryptresolver`
+#   • auto-deploy: Shepherd observa o label `com.nexus.autodeploy=true`
 #
-# Ajuste `entrypoints` e `certresolver` abaixo para casarem com o SEU Traefik
-# (os mesmos nomes usados pelas stacks nexus-odoo / nexus-insights).
+# Imagem no GHCR é PRIVADA (org nexusai360). O pull no Swarm usa a credencial
+# de registry do nó (docker login ghcr.io) / X-Registry-Auth — não precisa ser pública.
 # ═════════════════════════════════════════════════════════════════════════
-version: "3.8"
+version: "3.7"
 
 services:
   app:
     image: ghcr.io/nexusai360/painel-celula:latest
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
     networks:
       - rede_nexusAI
       - internal
     environment:
-      # Aponta para o Postgres da própria stack. Em Swarm, se o DNS do overlay
-      # oscilar, use o FQDN do serviço: painel-celula_db.
-      DATABASE_URL: "postgresql://icelula:${DB_PASSWORD}@db:5432/icelula?schema=public"
-      JWT_SECRET: "${JWT_SECRET}"
-      NODE_ENV: "production"
-      API_PORT: "3000"
-      HOST: "0.0.0.0"
-      TZ: "America/Sao_Paulo"
-      # Admin real criado/promovido de forma idempotente no boot (entrypoint).
-      ADMIN_EMAIL: "${ADMIN_EMAIL}"
-      ADMIN_SENHA: "${ADMIN_SENHA}"
-      ADMIN_NOME: "${ADMIN_NOME}"
-      # CORS não é necessário no modo serviço único (front na mesma origem).
-      # Integração Google Calendar (opcional, desligada por padrão):
-      GOOGLE_OAUTH_ENABLED: "false"
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - NODE_ENV=production
+      - API_PORT=3000
+      - HOST=0.0.0.0
+      - TZ=America/Sao_Paulo
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_SENHA=${ADMIN_SENHA}
+      - ADMIN_NOME=${ADMIN_NOME}
     deploy:
+      mode: replicated
       replicas: 1
-      restart_policy:
-        condition: any
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
       labels:
-        # ── Auto-deploy via Shepherd ──────────────────────────────────────
-        - "com.nexus.autodeploy=true"
-        # ── Roteamento Traefik ────────────────────────────────────────────
-        - "traefik.enable=true"
-        - "traefik.docker.network=rede_nexusAI"
-        - "traefik.http.routers.painel-celula.rule=Host(`celula.nexusai360.com`)"
-        - "traefik.http.routers.painel-celula.entrypoints=websecure"
-        - "traefik.http.routers.painel-celula.tls=true"
-        - "traefik.http.routers.painel-celula.tls.certresolver=letsencrypt"
-        - "traefik.http.services.painel-celula.loadbalancer.server.port=3000"
+        - com.nexus.autodeploy=true
+        - traefik.enable=true
+        - traefik.http.routers.painel-celula.rule=Host(`celula.nexusai360.com`)
+        - traefik.http.routers.painel-celula.entrypoints=websecure
+        - traefik.http.routers.painel-celula.tls=true
+        - traefik.http.routers.painel-celula.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.painel-celula.middlewares=painel-celula-headers
+        - traefik.http.routers.painel-celula-http.rule=Host(`celula.nexusai360.com`)
+        - traefik.http.routers.painel-celula-http.entrypoints=web
+        - traefik.http.routers.painel-celula-http.middlewares=painel-celula-redirect
+        - traefik.http.middlewares.painel-celula-redirect.redirectscheme.scheme=https
+        - traefik.http.middlewares.painel-celula-redirect.redirectscheme.permanent=true
+        - traefik.http.services.painel-celula.loadbalancer.server.port=3000
+        - traefik.http.services.painel-celula.loadbalancer.passHostHeader=true
+        - traefik.http.middlewares.painel-celula-headers.headers.customrequestheaders.X-Forwarded-Proto=https
+        - traefik.http.middlewares.painel-celula-headers.headers.stsSeconds=31536000
+        - traefik.http.middlewares.painel-celula-headers.headers.stsIncludeSubdomains=true
+        - traefik.http.middlewares.painel-celula-headers.headers.forceSTSHeader=true
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
 
   db:
     image: postgres:16-alpine
     networks:
       - internal
     environment:
-      POSTGRES_USER: "icelula"
-      POSTGRES_PASSWORD: "${DB_PASSWORD}"
-      POSTGRES_DB: "icelula"
+      - POSTGRES_USER=icelula
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=icelula
     volumes:
       - painel_celula_pgdata:/var/lib/postgresql/data
     deploy:
+      mode: replicated
       replicas: 1
-      restart_policy:
-        condition: any
       placement:
         constraints:
           - node.role == manager
+      restart_policy:
+        condition: any
 
 networks:
   rede_nexusAI:
     external: true
+    name: rede_nexusAI
   internal:
     driver: overlay
 
 volumes:
   painel_celula_pgdata:
+    driver: local
