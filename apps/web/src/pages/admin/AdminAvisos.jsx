@@ -3,6 +3,7 @@ import { Megaphone, Send } from 'lucide-react'
 import { Checkbox } from '../../components/ui/Checkbox.jsx'
 import { Button } from '../../components/ui/Button.jsx'
 import { Input } from '../../components/ui/Input.jsx'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Tabs.jsx'
 import { Skeleton } from '../../components/ui/Estados.jsx'
 import { useToast } from '../../components/ui/Toast.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -73,6 +74,7 @@ export default function AdminAvisos() {
   const toast = useToast()
   const [rascunho, setRascunho] = useState(null)
   const [salvando, setSalvando] = useState(false)
+  const [aba, setAba] = useState('banner')
 
   useEffect(() => {
     apiBannerAdmin()
@@ -104,6 +106,12 @@ export default function AdminAvisos() {
         </div>
       </div>
 
+      <Tabs value={aba} onValueChange={setAba} className="space-y-5">
+        <TabsList aria-label="Avisos">
+          <TabsTrigger value="banner">Banner do topo</TabsTrigger>
+          <TabsTrigger value="notificacao">Notificação</TabsTrigger>
+        </TabsList>
+        <TabsContent value="banner">
       {!rascunho ? (
         <Skeleton className="h-48 w-full rounded-2xl" />
       ) : (
@@ -148,8 +156,11 @@ export default function AdminAvisos() {
           </div>
         </div>
       )}
-
-      <EnviarNotificacao />
+        </TabsContent>
+        <TabsContent value="notificacao">
+          <EnviarNotificacao />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
