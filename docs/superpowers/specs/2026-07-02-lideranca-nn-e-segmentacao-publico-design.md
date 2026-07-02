@@ -1,8 +1,22 @@
-# Spec (v3 — confirmada) — Papéis, liderança N:N e segmentação de avisos
+# Spec (v4 — pós Review 1) — Papéis, liderança N:N e segmentação de avisos
 
-> Status: **v3-consolidada** — todas as decisões do dono confirmadas e incorporadas.
-> Próximo passo da metodologia: **Review 1 (adversarial)** sobre esta versão → v4 → Review 2 → final →
-> plano por fase → execução TDD. Trabalho direto na `main`, live em http://localhost:3200.
+> Status: **v4** — decisões do dono confirmadas + achados da **Review 1** incorporados.
+> Próximo passo: **Review 2 (adversarial, sobre esta v4)** → final → plano por fase → execução TDD.
+> Trabalho direto na `main`, live em http://localhost:3200.
+
+## Resoluções da Review 1 (o que mudou da v3 → v4)
+- **Guard novo `requireGestor`** substitui os 11 `requireRole('LIDER')` órfãos (LÍDER deixa de ser nível). Ver
+  "Estratégia de guards" na Fase A. `encontros.js` entra no blast radius.
+- **"Todos" vira flag booleano por eixo** no schema de alvo (`celulasTodas`/`qualificacoesTodas`/
+  `niveisTodas`), resolvendo a ambiguidade "Todos × vazio" e o problema de células criadas depois.
+- **Gestão de célula é dirigida pelo VÍNCULO (junção `lideres`), não pela qualificação.** A junção só contém
+  quem tem qualificação ≥ LÍDER (adicionar promove a LÍDER). Co-líder/Louvor/etc. **não** entram na junção e
+  **não** têm poderes de liderança (coerente com "co-líder não cria/não envia").
+- **A2b ajustado** para não depender de B: na Fase A a aprovação por célula usa o vínculo escalar atual; a
+  versão N:N (conjunto de células lideradas) entra na Fase B junto da junção.
+- Mapeados: callers de `podeGerenciarCelula` (`presenca.js`, `encontros.js`, filtro de `GET /celulas`),
+  payload do JWT (`papel`→`nivelAcesso`/`qualificacao`), badge do sino (`escopo` removido), `ehAdmin` no
+  `escopo.js` (corrige bug latente do SUPER_ADMIN puro), e nota de reconciliação da migração.
 
 ## Visão geral
 
@@ -60,11 +74,32 @@ Criar enums+colunas novas → backfill → parar de usar coluna antiga. Backfill
 - `packages/shared/src/roles.js`: opera sobre `nivelAcesso` (`NIVEL_RANK`, `temNivel`, `ehAdmin`,
   `ehSuperAdmin`, `podeEditarNivel`, `opcoesDeNivel`, `podeAgirSobre`). **Novo** `qualificacao.js`
   (`QUALIFICACAO_RANK`, `ROTULO_QUALIFICACAO`, ordem, `podeEditarQualificacao`, `opcoesDeQualificacao`).
-- `apps/api/src/lib/roles.js`: `requireRole` lê/injeta `nivelAcesso`.
-- **Remover o acoplamento célula↔papel** (`celulas.js:129,357`, `usuarios.js:91`): operações de célula e
-  de aprovação deixam de escrever nível de acesso; passam a mexer em qualificação e/ou vínculo (Fase B).
-- `escopo.js:podeGerenciarCelula`: `nivelAcesso ADMIN+` **ou** "é líder desta célula" (vínculo da Fase B),
-  sem comparar `papel` literal.
+- `apps/api/src/lib/roles.js`: `requireRole` lê/injeta `nivelAcesso`. **`requireRole` passa a ser só de
+  NÍVEL** (`USUARIO`/`ADMIN`/`SUPER_ADMIN`) — nunca mais `requireRole('LIDER'/'MEMBRO')`.
+
+#### Estratégia de guards (fix crítico C1/C2 da Review 1)
+`LIDER` deixa de ser nível → todos os `requireRole('LIDER')` (11 ocorrências) e os `requireRole('MEMBRO')`
+precisam de novo guard. Regras:
+- **Autenticado qualquer** (antigo `requireRole('MEMBRO')`) → `requireAuth` (só exige sessão válida;
+  `USUARIO+`). Ex.: `GET /notificacoes`, `perfil`, `presenca` do próprio.
+- **Novo `requireGestor`** = **nível ADMIN+** **OU** **é líder de alguma célula** (∈ junção `lideres`) **OU**
+  qualificação ≥ LÍDER. Aplica o gate grosso; o **escopo fino** (esta célula específica) continua no
+  `podeGerenciarCelula`. Substitui `requireRole('LIDER')` em: `celulas.js:156,192,209,226`,
+  `usuarios.js:44,56,84`, `presenca.js:90,117`, `encontros.js:75,113,150`, `notificacoes.js:29`.
+- **Enviar notificação** (`POST /notificacoes`) = `requireGestor` **e** revalidação: ADMIN+ livre; LÍDER/
+  PASTOR travado às suas células (co-líder e abaixo → 403).
+- **`encontros.js`** (esquecido na v3): trocar `usuario.papel === 'LIDER'/'MEMBRO'` (`:35,39`) por
+  `podeGerenciarCelula`/vínculo; 3 guards viram `requireGestor`.
+- **Remover o acoplamento célula↔papel** (`celulas.js:129,357`, `usuarios.js:91`): operações de célula/
+  aprovação deixam de escrever nível; mexem em qualificação e/ou vínculo (Fase B).
+- `escopo.js:podeGerenciarCelula`: **`ehAdmin(nivelAcesso)`** (não literal `=== 'ADMIN'` — corrige o bug do
+  SUPER_ADMIN puro retornar false hoje) **ou** usuário ∈ `celula.lideres`. Assinatura muda de `{liderId}`
+  escalar para `lideres[]`; **callers a ajustar:** `celulas.js:202,213,230`, `presenca.js:99,123`,
+  `encontros.js:36`, e o filtro `GET /celulas` `{liderId:usuario.id}` → `{lideres:{some:{id:usuario.id}}}`
+  (`celulas.js:158`).
+- **JWT:** `auth.js:8`/`googleAuth.js:12` deixam de assinar `papel`; assinam `nivelAcesso` (e mantêm
+  `celulaId` escalar do vínculo de membro). `requireRole` já recarrega do DB, então o token só carrega o
+  mínimo.
 - `PATCH /usuarios/:id/papel` → dois endpoints validados por zod:
   - `PATCH /usuarios/:id/nivel` (mexer em Admin/Super só Super Admin, como hoje; **A2a:** admin/super
     podem alterar o próprio; ninguém se auto-rebaixa a ponto de travar o sistema — manter guarda de
@@ -76,8 +111,10 @@ Criar enums+colunas novas → backfill → parar de usar coluna antiga. Backfill
 - `POST /usuarios/:id/aprovar` aceita `qualificacao` (default `MEMBRO`) e grava junto de `aprovado:true`.
   Quem aprova **deve** escolher; UI já vem em MEMBRO. Aprovação em lote usa o default MEMBRO.
 - **A2b — agrupamento por célula:** `GET /usuarios/pendentes` retorna a **célula pretendida** de cada
-  pendente; a UI agrupa por célula. Líder só recebe/aprova pendentes das células que ele lidera (checar
-  contra o conjunto de lideranças, não `celulaId` escalar).
+  pendente; a UI agrupa por célula. **Na Fase A** (liderança ainda 1:1) o líder vê os pendentes da sua
+  célula via `usuario.celulaId` escalar (como hoje, `usuarios.js:11`). **Na Fase B** isso passa a checar o
+  **conjunto de células lideradas** (junção) — o líder N:N vê seções por cada célula que lidera. (Evita a
+  dependência invertida apontada na Review 1.)
 - **QR / auto-cadastro:** entra `qualificacao=MEMBRO` automático; sem fluxo de solicitação na plataforma.
 - **Nova UI de "editar usuário"** (não existe hoje): modal em `AdminUsuarios.jsx` → "Todos", edita
   qualificação (e nível quando permitido), nome/whatsapp/ativo, via `PUT /usuarios/:id` (estendido).
@@ -114,6 +151,16 @@ Criar enums+colunas novas → backfill → parar de usar coluna antiga. Backfill
   vínculos; removido de todas mantém LÍDER **sem vínculo** (estado válido).
 - **`User.celulaId` do líder** deixa de ser efeito de liderar. Membro=`celulaId`; liderança=junção;
   independentes (um líder pode ser membro de uma e liderar outras).
+- **A junção `lideres` só contém quem tem qualificação ≥ LÍDER** (resolução Review 1, ponto aberto 2):
+  gestão de célula (aprovar pendentes, enviar notificação da célula, editar cronograma) é dirigida pelo
+  **vínculo** (∈ `lideres`), e adicionar alguém à junção **exige/promove** qualificação LÍDER. Co-líder,
+  Louvor etc. **não** entram na junção nem têm poderes de liderança — são só tags de qualificação. Assim
+  "co-líder não cria/não envia" fica consistente com "gestão por vínculo".
+- **Reconciliação da migração (M2):** um usuário hoje `ADMIN` **e** `liderId` de célula vira
+  `nivelAcesso=ADMIN` + `qualificacao=MEMBRO` (A1) mas **mantém o vínculo** na junção. Como a junção passa a
+  exigir ≥ LÍDER, a migração B **promove a `qualificacao=LIDER`** todo usuário que estiver na junção com
+  qualificação abaixo de LÍDER (backfill coerente). Idem para o `LIDER` que também é membro de outra célula:
+  mantém `celulaId` (membro) + entra na junção da que lidera.
 
 ### Rebaixamento de qualificação — travas
 - Rebaixar LÍDER→(abaixo) liderando **>1 célula** → **bloquear** ("remova das células antes de rebaixar").
@@ -149,18 +196,21 @@ Criar enums+colunas novas → backfill → parar de usar coluna antiga. Backfill
 ## Fase C — Segmentação (banner + notificação) com 3 eixos de alvo
 
 ### Os 3 eixos de alvo (combináveis, semântica **AND**)
-Um aviso (banner ou notificação) tem três filtros. O usuário recebe se casar nos **três** eixos:
-1. **Células** `celulasAlvo String[]` — nenhuma/algumas/todas.
-2. **Qualificações** `qualificacoesAlvo Qualificacao[]` — Convidado…Pastor; uma/algumas/todas.
-3. **Nível de acesso** `niveisAlvo NivelAcesso[]` — `USUARIO` e `ADMIN` (Super entra em ADMIN). Uma/ambas.
+Um aviso (banner ou notificação) tem três filtros. **Cada eixo tem um flag "Todos" booleano** (fix C3 da
+Review 1 — resolve a ambiguidade "Todos × vazio" e o problema de célula criada *depois*):
+1. **Células** — `celulasTodas Boolean` + `celulasAlvo String[]`.
+2. **Qualificações** — `qualificacoesTodas Boolean` + `qualificacoesAlvo Qualificacao[]`.
+3. **Nível de acesso** — `niveisTodas Boolean` + `niveisAlvo NivelAcesso[]` (`USUARIO`/`ADMIN`; Super em ADMIN).
 
-**Regra de match (por conta, dedup — usuário vê 1×):** recebe sse
-`(célulaMatch) AND (qualificaçãoMatch) AND (nívelMatch)`, onde cada eixo com **"Todos" marcado**
-(equivalente a todos os itens) é **não-restritivo** (passa todo mundo naquele eixo):
-- `célulaMatch`: Todos → true; senão `U.celulaId ∈ celulasAlvo` **OU** alguma célula que U **lidera** ∈
-  celulasAlvo. **Célula é independente do líder:** mirar a célula A não puxa as outras células do líder.
-- `qualificaçãoMatch`: Todos → true; senão `U.qualificacao ∈ qualificacoesAlvo`.
-- `nívelMatch`: Todos → true; senão `U.nivelAcesso ∈ niveisAlvo` (ADMIN casa ADMIN∪SUPER_ADMIN).
+**Regra de match (por conta, dedup — usuário vê 1×):** recebe sse `célulaMatch AND qualificaçãoMatch AND nívelMatch`:
+- `célulaMatch`: `celulasTodas` → true (inclui células futuras); senão `U.celulaId ∈ celulasAlvo` **OU**
+  alguma célula que U **lidera** ∈ celulasAlvo. **Célula é independente do líder:** mirar a célula A não puxa
+  as outras células do líder.
+- `qualificaçãoMatch`: `qualificacoesTodas` → true; senão `U.qualificacao ∈ qualificacoesAlvo`.
+- `nívelMatch`: `niveisTodas` → true; senão `U.nivelAcesso ∈ niveisAlvo`, **mapeando SUPER_ADMIN→ADMIN no
+  servidor** (ADMIN no alvo casa ADMIN∪SUPER_ADMIN).
+- **Invariante:** um eixo com `Todos=false` **precisa** de ≥1 item no array; `Todos=false` + array vazio é
+  inválido (ninguém) → o servidor rejeita o envio. `Todos=true` ignora o array.
 
 **Exemplos (validam a semântica AND):**
 - "Todos os usuários" → os 3 eixos em "Todos" → todo mundo.
@@ -170,27 +220,31 @@ Um aviso (banner ou notificação) tem três filtros. O usuário recebe se casar
   qualificação e célula.
 
 ### Regras de UI do seletor (`SeletorPublico`) — auto-preenchimento e travas (bem amarradas)
-- Cada eixo tem itens + um master **"Todos"**. Marcar "Todos" seleciona todos os itens; desmarcar um item
-  desliga o "Todos" mas mantém o resto (auto-ativação/desativação em sincronia).
-- Atalho global **"Todos os usuários"**: seta os 3 eixos para "Todos". Depois o usuário pode **desmarcar**
-  qualquer item de qualquer eixo (ex.: manter todas qualificações/níveis e restringir células).
+- Cada eixo mapeia no par (`Todos` flag + array). Marcar o master **"Todos"** liga `Todos=true` (UI mostra
+  todos os itens marcados/esmaecidos); desmarcar qualquer item liga `Todos=false` e materializa o array com
+  os itens restantes (auto-ativação/desativação em sincronia).
+- Atalho global **"Todos os usuários"**: liga `Todos=true` nos 3 eixos. Depois o usuário pode **desmarcar**
+  itens de qualquer eixo (ex.: manter qualificações/níveis "Todos" e restringir só as células).
 - **Travas (impedir envio "burro"):**
-  - Nenhum eixo pode ficar **vazio** (0 itens) — vazio = ninguém; bloquear envio com aviso ("selecione ao
-    menos um item ou 'Todos' em cada eixo").
-  - **Eixo Nível só aparece para remetente ADMIN/SUPER.** Para remetente **LÍDER/PASTOR** (nível USUARIO)
-    o eixo Nível é **fixo = {USUARIO}** e oculto (líder nunca mira admin), qualificações-alvo ⊆
-    {Convidado…Líder} (sem mirar acima de si? assumir ≤ própria qualificação), e células-alvo **⊆ células
-    que ele lidera** (vazio → todas as que lidera; nunca a plataforma).
+  - Eixo com `Todos=false` e **0 itens** = ninguém → bloquear envio com aviso ("selecione ao menos um item
+    ou 'Todos' em cada eixo"). (Consistente com a invariante do match.)
+  - **Eixo Nível só aparece para remetente ADMIN/SUPER.** Para remetente **LÍDER/PASTOR** (nível USUARIO):
+    o eixo Nível é **fixo = {USUARIO}** e oculto (líder nunca mira admin); qualificações-alvo livres
+    (Convidado…Pastor — "discriminar membros/líderes da célula", resolução Review 1 ponto 1: sem teto por
+    qualificação do remetente, pois o escopo de célula já limita); células-alvo **⊆ células que ele lidera**
+    (`celulasTodas` para um líder = todas as que ele lidera, **não** a plataforma).
   - Banner: remetente **só ADMIN+**; líder/pastor **não** veem banner. Notificação: ADMIN+ e LÍDER/PASTOR.
   - Antes de gravar, o **servidor revalida** todos os eixos contra a permissão do remetente (nunca confia no
-    cliente): rejeita 403 se um líder tentar mirar admin, célula fora do escopo, ou mandar banner.
+    cliente): rejeita 403 se um líder tentar `niveisAlvo` ≠ {USUARIO}, célula fora do seu escopo, ou banner.
 
 ### Banner com expiração + carrossel
 - **Schema:** `Banner` deixa de ser singleton. CRUD de vários:
-  `{ id, mensagem, ativo, expiraEm DateTime (obrigatório), qualificacoesAlvo[], niveisAlvo[], celulasAlvo[],
-  autorId, criadoEm }`. Migração: registro atual (se houver) vira banner com `expiraEm` = +30d default.
-- **Rotas:** `GET /banner` → **lista** de banners `ativo && expiraEm>now` que casam com o usuário;
-  `GET /banner/admin` (lista), `POST/PATCH/DELETE /banner/:id`. Fim do `findFirst` cego.
+  `{ id, mensagem, ativo, expiraEm DateTime (obrigatório), celulasTodas, celulasAlvo[], qualificacoesTodas,
+  qualificacoesAlvo[], niveisTodas, niveisAlvo[], autorId, criadoEm }`. Migração: registro atual (se houver)
+  vira banner com os 3 `Todos=true` e `expiraEm` = +30d default.
+- **Rotas:** `GET /banner` → **lista** `{ banners: [...] }` (antes `{ mensagem }`) de banners
+  `ativo && expiraEm>now` que casam com o usuário; `GET /banner/admin` (lista), `POST/PATCH/DELETE /banner/:id`.
+  Fim do `findFirst` cego. **`BannerBar.jsx` passa a consumir array** (contrato muda; M3 da Review 1).
 - **Frontend `BannerBar.jsx`:** carrossel — 1 por vez, indicador ("• • •") quando há outros; troca
   **automática a cada 10s** com transição sutil; **pausa no hover** (retoma no mouse-leave); **clique**
   avança; respeita `prefers-reduced-motion` (sem auto-rotate; navegação manual). Banner expirado some.
@@ -198,7 +252,10 @@ Um aviso (banner ou notificação) tem três filtros. O usuário recebe se casar
   (data+hora) **obrigatório** de expiração; não salva sem expiração.
 
 ### Notificação — alvo + leitura por item + modal
-- `Notificacao` ganha `qualificacoesAlvo[]`, `niveisAlvo[]`, `celulasAlvo[]` (substitui `escopo/celulaId`).
+- `Notificacao` ganha os 3 pares de alvo (`celulasTodas`+`celulasAlvo[]`, `qualificacoesTodas`+
+  `qualificacoesAlvo[]`, `niveisTodas`+`niveisAlvo[]`), substituindo `escopo/celulaId`. **`NotificacoesSino.jsx:68`
+  hoje deriva o badge "Geral" de `n.escopo==='GLOBAL'`** (A4 da Review 1) → passar a derivar um rótulo do alvo
+  (ex.: "Geral" quando os 3 são `Todos`; senão um resumo tipo "Sua célula"/"Líderes").
 - **Leitura por item (C3):** nova tabela `NotificacaoLeitura { userId, notificacaoId, lidaEm DateTime }`
   (`@@unique([userId,notificacaoId])`). Uma notificação é "lida" para U se existe linha. Remove o modelo de
   marca única `User.notificacoesLidasEm` (ou mantém só como fallback/migração).
