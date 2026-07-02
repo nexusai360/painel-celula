@@ -26,11 +26,12 @@ export async function authRoutes(app) {
       celulaId = celula.id
     }
 
-    // Auto-cadastro nasce PENDENTE (aprovado=false). Fazemos AUTO-LOGIN: o usuário
-    // entra já logado, mas travado — só acessa a seleção de célula e o perfil até
-    // ser aprovado por um líder da célula escolhida (ou por um admin).
+    // Cadastro via QR Code da célula = confiança (a pessoa está fisicamente na
+    // célula): entra JÁ APROVADO e vinculado à célula. Cadastro pelo site (sem QR)
+    // nasce PENDENTE — auto-login, mas travado até um líder/admin aprovar.
+    const viaQr = !!qrToken
     const user = await prisma.user.create({
-      data: { nome, email, senhaHash: await hashSenha(senha), papel: 'MEMBRO', celulaId, aprovado: false },
+      data: { nome, email, senhaHash: await hashSenha(senha), papel: 'MEMBRO', celulaId, aprovado: viaQr },
       ...COM_CELULA
     })
     return reply.code(201).send({

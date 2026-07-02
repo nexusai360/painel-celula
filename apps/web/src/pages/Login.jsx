@@ -1,18 +1,21 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { loginSchema } from '@icelula/shared'
 import { AuthLayout } from '../components/AuthLayout.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { Input } from '../components/ui/Input.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { apiCheckinQr } from '../lib/api.js'
 import { BotaoGoogle } from '../components/BotaoGoogle.jsx'
 
 export default function Login() {
   const { entrar } = useAuth()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const qrToken = params.get('celula') || undefined
   const [erroApi, setErroApi] = useState('')
   const {
     register,
@@ -24,6 +27,8 @@ export default function Login() {
     setErroApi('')
     try {
       await entrar(dados)
+      // Veio do QR da célula: tenta marcar presença de hoje (best-effort).
+      if (qrToken) await apiCheckinQr(qrToken).catch(() => {})
       navigate('/app', { replace: true })
     } catch (e) {
       setErroApi(e?.response?.data?.erro || 'Não foi possível entrar. Tente novamente.')

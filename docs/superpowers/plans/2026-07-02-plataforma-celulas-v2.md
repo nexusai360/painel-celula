@@ -119,7 +119,11 @@ ADMIN/SUPER_ADMIN. ADMIN pode gerenciar MEMBRO↔LIDER e (des)ativar contas.
   de cônjuge por e-mail (case-insensitive) com DUPLO OPT-IN (modelo ConjugeSolicitacao;
   convite→aceite→vínculo mútuo; auto-aceite se convite recíproco; desvincular).
   UI em ConjugeSecao (aparece p/ casado/união estável). Testado local.
-- [ ] Fase 5 — QR presença.
+- [x] Fase 5 — QR. Cadastro via QR válido = SEM aprovação (aprovado=true) e vinculado
+  à célula. Endpoint POST /qr/:qrToken/checkin marca presença no encontro de HOJE se
+  na janela (após o horário; TZ SP). Front chama check-in em QrLanding (logado),
+  Register (pós-cadastro QR) e Login (?celula). Cadastro pelo site (sem QR) segue
+  pendente. FALTA (refino): passar qrToken no link "Criar conta" do Login.
 - [ ] Fase 6 — Notificações + banner.
 - [ ] Fase 7 — Separação de áreas.
 

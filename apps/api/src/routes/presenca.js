@@ -5,6 +5,34 @@ import { podeMarcarPresenca } from '../lib/encontros.service.js'
 import { publicoLeve } from '../lib/usuarios.js'
 
 export async function presencaRoutes(app) {
+  // ── POST /qr/:qrToken/checkin — check-in por QR Code na célula ───────────────
+  // Marca presença no encontro de HOJE da célula, se dentro da janela (após o
+  // horário). Usado logo após ler o QR (cadastro/login). Escopo: só da célula do
+  // usuário. TZ do servidor = America/Sao_Paulo (o "hoje" é local).
+  app.post('/qr/:qrToken/checkin', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+    const { qrToken } = request.params
+    const usuario = request.usuario
+    const celula = await prisma.celula.findUnique({ where: { qrToken }, select: { id: true, ativa: true } })
+    if (!celula || !celula.ativa) return reply.code(404).send({ erro: 'Célula não encontrada' })
+    if (usuario.celulaId !== celula.id) {
+      return reply.code(403).send({ erro: 'Este QR é de outra célula' })
+    }
+    const inicio = new Date(); inicio.setHours(0, 0, 0, 0)
+    const fim = new Date(); fim.setHours(23, 59, 59, 999)
+    const encontro = await prisma.encontro.findFirst({
+      where: { celulaId: celula.id, data: { gte: inicio, lte: fim } }
+    })
+    if (!encontro) return reply.send({ presenca: false, motivo: 'Não há reunião da célula hoje' })
+    const janela = podeMarcarPresenca(encontro)
+    if (!janela.ok) return reply.send({ presenca: false, motivo: janela.motivo })
+    await prisma.presenca.upsert({
+      where: { encontroId_userId: { encontroId: encontro.id, userId: usuario.id } },
+      update: {},
+      create: { encontroId: encontro.id, userId: usuario.id }
+    })
+    return reply.send({ presenca: true, encontroId: encontro.id })
+  })
+
   // ── POST /encontros/:id/presenca (MEMBRO+; marca a própria presença) ─────────
   app.post('/encontros/:id/presenca', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
     const { id } = request.params

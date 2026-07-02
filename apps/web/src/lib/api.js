@@ -149,6 +149,12 @@ export async function apiAtualizarUsuarioAtivo(id, ativo) {
   return data.usuario
 }
 
+// ---- Check-in por QR Code (marca presença de hoje, se na janela) ----
+export async function apiCheckinQr(qrToken) {
+  const { data } = await api.post(`/qr/${qrToken}/checkin`)
+  return data
+}
+
 // ---- Onboarding: seleção de célula ----
 export async function apiCelulasPublicas() {
   const { data } = await api.get('/celulas/publicas')

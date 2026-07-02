@@ -8,6 +8,7 @@ import { Card } from '../components/ui/Card.jsx'
 import { Input } from '../components/ui/Input.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { apiCheckinQr } from '../lib/api.js'
 import { BotaoGoogle } from '../components/BotaoGoogle.jsx'
 
 export default function Register() {
@@ -27,6 +28,8 @@ export default function Register() {
     try {
       // Auto-login; a app roteia o usuário pendente para a seleção de célula.
       await cadastrar({ ...dados, qrToken })
+      // Via QR: já aprovado e vinculado — tenta marcar presença de hoje.
+      if (qrToken) await apiCheckinQr(qrToken).catch(() => {})
       navigate('/app', { replace: true })
     } catch (e) {
       setErroApi(e?.response?.data?.erro || 'Não foi possível criar a conta. Tente novamente.')

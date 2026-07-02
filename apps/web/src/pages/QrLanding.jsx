@@ -4,7 +4,7 @@ import { LogIn, UserPlus } from 'lucide-react'
 import { AuthLayout } from '../components/AuthLayout.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Card } from '../components/ui/Card.jsx'
-import { apiCelulaPublica } from '../lib/api.js'
+import { apiCelulaPublica, apiCheckinQr } from '../lib/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { BotaoGoogle } from '../components/BotaoGoogle.jsx'
 
@@ -16,8 +16,10 @@ export default function QrLanding() {
   const [estado, setEstado] = useState('carregando') // carregando | ok | erro
 
   useEffect(() => {
-    if (usuario) navigate('/app', { replace: true })
-  }, [usuario, navigate])
+    if (!usuario) return
+    // Já logado: tenta marcar presença por este QR (best-effort) e segue.
+    apiCheckinQr(qrToken).catch(() => {}).finally(() => navigate('/app', { replace: true }))
+  }, [usuario, qrToken, navigate])
 
   useEffect(() => {
     let ativo = true
@@ -64,7 +66,7 @@ export default function QrLanding() {
               <Button onClick={() => navigate(`/cadastro?celula=${qrToken}`)}>
                 <UserPlus className="h-4 w-4" /> Criar minha conta
               </Button>
-              <Button variant="secondary" onClick={() => navigate('/entrar')}>
+              <Button variant="secondary" onClick={() => navigate(`/entrar?celula=${qrToken}`)}>
                 <LogIn className="h-4 w-4" /> Já tenho conta
               </Button>
               <BotaoGoogle contexto="login" qrToken={qrToken} />
