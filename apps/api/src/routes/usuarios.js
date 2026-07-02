@@ -1,18 +1,19 @@
 import { prisma } from '../prisma.js'
-import { requireRole, podeEditarPapel, temNivel } from '../lib/roles.js'
+import {
+  requireRole, requireGestor, ehAdmin, podeEditarNivel, podeEditarQualificacao,
+  TODOS_NIVEIS, TODAS_QUALIFICACOES,
+} from '../lib/roles.js'
 import { usuarioAdminUpdateSchema, normalizarWhatsapp } from '@icelula/shared'
 import { publico } from '../lib/usuarios.js'
 
-const PAPEIS_VALIDOS = ['MEMBRO', 'LIDER', 'ADMIN', 'SUPER_ADMIN']
-
-// ADMIN+ gerencia qualquer pendente; LÍDER só pendentes da própria célula.
+// ADMIN+ gerencia qualquer pendente; gestor (líder) só os da própria célula.
 function podeGerenciarPendente(usuario, alvo) {
-  if (temNivel(usuario.papel, 'ADMIN')) return true
+  if (ehAdmin(usuario.nivelAcesso)) return true
   return !!usuario.celulaId && alvo.celulaId === usuario.celulaId
 }
 
 export async function usuarioRoutes(app) {
-  // Lista/busca usuários (ADMIN) — usado para atribuir líder. Nunca expõe senhaHash.
+  // Lista/busca usuários (ADMIN). Nunca expõe senhaHash.
   app.get('/usuarios', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
     const { busca } = request.query
     const where = busca
@@ -31,7 +32,8 @@ export async function usuarioRoutes(app) {
         id: true,
         nome: true,
         email: true,
-        papel: true,
+        nivelAcesso: true,
+        qualificacao: true,
         celulaId: true,
         ativo: true,
         aprovado: true
@@ -41,8 +43,8 @@ export async function usuarioRoutes(app) {
   })
 
   // Lista contas pendentes: ADMIN+ vê todas; LÍDER vê só as da própria célula.
-  app.get('/usuarios/pendentes', { preHandler: requireRole('LIDER') }, async (request, reply) => {
-    const admin = temNivel(request.usuario.papel, 'ADMIN')
+  app.get('/usuarios/pendentes', { preHandler: requireGestor() }, async (request, reply) => {
+    const admin = ehAdmin(request.usuario.nivelAcesso)
     const where = { aprovado: false, ativo: true, ...(admin ? {} : { celulaId: request.usuario.celulaId }) }
     const usuarios = await prisma.user.findMany({
       where,
@@ -53,46 +55,80 @@ export async function usuarioRoutes(app) {
   })
 
   // Aprova uma conta pendente (ADMIN+ qualquer; LÍDER só da própria célula).
-  app.post('/usuarios/:id/aprovar', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  // Quem aprova escolhe a QUALIFICAÇÃO (default MEMBRO), dentro das opções permitidas.
+  app.post('/usuarios/:id/aprovar', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
     const alvo = await prisma.user.findUnique({ where: { id } })
     if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
     if (!podeGerenciarPendente(request.usuario, alvo)) return reply.code(403).send({ erro: 'Sem permissão' })
-    const user = await prisma.user.update({ where: { id }, data: { aprovado: true } })
+
+    const qualificacao = request.body?.qualificacao || 'MEMBRO'
+    if (!TODAS_QUALIFICACOES.includes(qualificacao)) return reply.code(400).send({ erro: 'Qualificação inválida' })
+    if (!podeEditarQualificacao(request.usuario.nivelAcesso, request.usuario.qualificacao, qualificacao)) {
+      return reply.code(403).send({ erro: 'Sem permissão para definir essa qualificação' })
+    }
+
+    const user = await prisma.user.update({ where: { id }, data: { aprovado: true, qualificacao } })
     return reply.send({ usuario: publico(user) })
   })
 
-  // Altera o papel (nível de acesso) de um usuário.
-  // Só SUPER_ADMIN concede/revoga ADMIN ou SUPER_ADMIN; ADMIN troca MEMBRO<->LIDER.
-  app.patch('/usuarios/:id/papel', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+  // Altera o NÍVEL DE ACESSO (USUARIO/ADMIN/SUPER_ADMIN). Só ADMIN+; travas por podeEditarNivel.
+  app.patch('/usuarios/:id/nivel', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
     const { id } = request.params
-    const novo = request.body?.papel
-    if (!PAPEIS_VALIDOS.includes(novo)) return reply.code(400).send({ erro: 'Papel inválido' })
-    if (id === request.usuario.id) return reply.code(400).send({ erro: 'Você não pode alterar o próprio papel' })
+    const novo = request.body?.nivelAcesso
+    if (!TODOS_NIVEIS.includes(novo)) return reply.code(400).send({ erro: 'Nível inválido' })
+    if (id === request.usuario.id) return reply.code(400).send({ erro: 'Você não pode alterar o próprio nível' })
 
     const alvo = await prisma.user.findUnique({ where: { id } })
     if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
-    if (!podeEditarPapel(request.usuario.papel, alvo.papel, novo)) {
+    if (!podeEditarNivel(request.usuario.nivelAcesso, alvo.nivelAcesso, novo)) {
       return reply.code(403).send({ erro: 'Sem permissão para definir esse nível de acesso' })
     }
+    // Não deixa remover o ÚLTIMO super admin.
+    if (alvo.nivelAcesso === 'SUPER_ADMIN' && novo !== 'SUPER_ADMIN') {
+      const outros = await prisma.user.count({ where: { nivelAcesso: 'SUPER_ADMIN', id: { not: id } } })
+      if (outros === 0) return reply.code(409).send({ erro: 'Não há como remover o último Super Admin' })
+    }
 
-    const user = await prisma.user.update({ where: { id }, data: { papel: novo } })
+    const user = await prisma.user.update({ where: { id }, data: { nivelAcesso: novo } })
     return reply.send({ usuario: publico(user) })
   })
 
-  // Recusa e remove uma conta ainda pendente (ADMIN+ qualquer; LÍDER só da sua célula).
-  app.post('/usuarios/:id/recusar', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  // Altera a QUALIFICAÇÃO. ADMIN+ livre; gestor (líder/pastor) só na própria célula, até LÍDER.
+  // Admin/super podem alterar a PRÓPRIA qualificação.
+  app.patch('/usuarios/:id/qualificacao', { preHandler: requireGestor() }, async (request, reply) => {
+    const { id } = request.params
+    const nova = request.body?.qualificacao
+    if (!TODAS_QUALIFICACOES.includes(nova)) return reply.code(400).send({ erro: 'Qualificação inválida' })
+
+    const alvo = await prisma.user.findUnique({ where: { id } })
+    if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
+
+    const admin = ehAdmin(request.usuario.nivelAcesso)
+    const escopoOk = admin || (id === request.usuario.id) ||
+      (!!request.usuario.celulaId && alvo.celulaId === request.usuario.celulaId)
+    if (!escopoOk) return reply.code(403).send({ erro: 'Sem permissão' })
+    if (!podeEditarQualificacao(request.usuario.nivelAcesso, request.usuario.qualificacao, nova)) {
+      return reply.code(403).send({ erro: 'Sem permissão para definir essa qualificação' })
+    }
+
+    const user = await prisma.user.update({ where: { id }, data: { qualificacao: nova } })
+    return reply.send({ usuario: publico(user) })
+  })
+
+  // Recusa uma conta ainda pendente (ADMIN+ qualquer; LÍDER só da sua célula).
+  app.post('/usuarios/:id/recusar', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
     const alvo = await prisma.user.findUnique({ where: { id } })
     if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
     if (alvo.aprovado) return reply.code(400).send({ erro: 'Conta já aprovada; use desativar.' })
     if (!podeGerenciarPendente(request.usuario, alvo)) return reply.code(403).send({ erro: 'Sem permissão' })
-    // Reprovar = soft (mantém na lista como REPROVADO, sem nível). Reativar depois volta a Membro.
-    const user = await prisma.user.update({ where: { id }, data: { ativo: false, papel: 'MEMBRO' } })
+    // Reprovar = soft (fica REPROVADO, sem qualificação de gestão). Reativar depois volta a Membro.
+    const user = await prisma.user.update({ where: { id }, data: { ativo: false, qualificacao: 'MEMBRO' } })
     return reply.send({ usuario: publico(user) })
   })
 
-  // Edita um membro (ADMIN): nome, email, whatsapp, ativo. Soft-delete via ativo:false.
+  // Edita um usuário (ADMIN): nome, email, whatsapp, ativo. Nível/qualificação vão pelos PATCH dedicados.
   app.put('/usuarios/:id', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
     const { id } = request.params
     const parsed = usuarioAdminUpdateSchema.safeParse(request.body)
@@ -101,13 +137,9 @@ export async function usuarioRoutes(app) {
     const alvo = await prisma.user.findUnique({ where: { id } })
     if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
 
-    // Mexer em conta ADMIN/SUPER_ADMIN é exclusivo do SUPER_ADMIN (self-exempt: admin edita a si mesmo).
-    const editorPapel = request.usuario.papel
-    if (
-      id !== request.usuario.id &&
-      editorPapel !== 'SUPER_ADMIN' &&
-      (alvo.papel === 'SUPER_ADMIN' || alvo.papel === 'ADMIN')
-    ) {
+    // Mexer em conta ADMIN/SUPER é exclusivo do SUPER_ADMIN (self-exempt: admin edita a si mesmo).
+    const editorNivel = request.usuario.nivelAcesso
+    if (id !== request.usuario.id && editorNivel !== 'SUPER_ADMIN' && ehAdmin(alvo.nivelAcesso)) {
       return reply.code(403).send({ erro: 'Sem permissão' })
     }
 

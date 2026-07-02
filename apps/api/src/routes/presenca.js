@@ -1,5 +1,5 @@
 import { prisma } from '../prisma.js'
-import { requireRole } from '../lib/roles.js'
+import { requireRole, requireGestor } from '../lib/roles.js'
 import { podeGerenciarCelula } from '../lib/escopo.js'
 import { podeMarcarPresenca } from '../lib/encontros.service.js'
 import { publicoLeve } from '../lib/usuarios.js'
@@ -9,7 +9,7 @@ export async function presencaRoutes(app) {
   // Marca presença no encontro de HOJE da célula, se dentro da janela (após o
   // horário). Usado logo após ler o QR (cadastro/login). Escopo: só da célula do
   // usuário. TZ do servidor = America/Sao_Paulo (o "hoje" é local).
-  app.post('/qr/:qrToken/checkin', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.post('/qr/:qrToken/checkin', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     const { qrToken } = request.params
     const usuario = request.usuario
     const celula = await prisma.celula.findUnique({ where: { qrToken }, select: { id: true, ativa: true } })
@@ -34,7 +34,7 @@ export async function presencaRoutes(app) {
   })
 
   // ── POST /encontros/:id/presenca (MEMBRO+; marca a própria presença) ─────────
-  app.post('/encontros/:id/presenca', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.post('/encontros/:id/presenca', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     const { id } = request.params
     const usuario = request.usuario
 
@@ -66,7 +66,7 @@ export async function presencaRoutes(app) {
   })
 
   // ── DELETE /encontros/:id/presenca (MEMBRO+; remove a própria presença) ─────
-  app.delete('/encontros/:id/presenca', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.delete('/encontros/:id/presenca', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     const { id } = request.params
     const usuario = request.usuario
 
@@ -87,7 +87,7 @@ export async function presencaRoutes(app) {
   })
 
   // ── GET /encontros/:id/presencas (LIDER+ com escopo) ─────────────────────────
-  app.get('/encontros/:id/presencas', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  app.get('/encontros/:id/presencas', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
 
     const encontro = await prisma.encontro.findUnique({
@@ -114,7 +114,7 @@ export async function presencaRoutes(app) {
   })
 
   // ── GET /celulas/:id/frequencia (LIDER+ com escopo) ──────────────────────────
-  app.get('/celulas/:id/frequencia', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  app.get('/celulas/:id/frequencia', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
 
     const celula = await prisma.celula.findUnique({ where: { id } })

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { prisma } from '../prisma.js'
-import { requireRole } from '../lib/roles.js'
+import { requireRole, requireGestor, ehAdmin } from '../lib/roles.js'
 import { materializarEncontros } from '../lib/encontros.service.js'
 import { podeGerenciarCelula, gerarQrToken } from '../lib/escopo.js'
 import { publicoLeve } from '../lib/usuarios.js'
@@ -126,7 +126,7 @@ export async function celulaRoutes(app) {
           if (liderId) {
             await tx.user.update({
               where: { id: liderId },
-              data: { papel: 'LIDER', celulaId: c.id }
+              data: { qualificacao: 'LIDER', celulaId: c.id }
             })
           }
           return c
@@ -153,9 +153,9 @@ export async function celulaRoutes(app) {
   })
 
   // ── GET /celulas (LIDER+) ───────────────────────────────────────────────────
-  app.get('/celulas', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  app.get('/celulas', { preHandler: requireGestor() }, async (request, reply) => {
     const usuario = request.usuario
-    const where = usuario.papel === 'ADMIN' ? {} : { liderId: usuario.id }
+    const where = ehAdmin(usuario.nivelAcesso) ? {} : { liderId: usuario.id }
     const celulas = await prisma.celula.findMany({
       where,
       orderBy: { nome: 'asc' },
@@ -170,7 +170,7 @@ export async function celulaRoutes(app) {
   // ── GET /celulas/publicas (seleção no onboarding — permite pendente) ─────────
   // Só expõe o essencial para escolher: bairro, dia, horário, frequência e os
   // líderes (nome + foto). Nunca o endereço completo.
-  app.get('/celulas/publicas', { preHandler: requireRole('MEMBRO', { permitirPendente: true }) }, async (request, reply) => {
+  app.get('/celulas/publicas', { preHandler: requireRole('USUARIO', { permitirPendente: true }) }, async (request, reply) => {
     const celulas = await prisma.celula.findMany({
       where: { ativa: true },
       orderBy: { nome: 'asc' },
@@ -189,7 +189,7 @@ export async function celulaRoutes(app) {
   })
 
   // ── GET /celulas/:id (escopo) ───────────────────────────────────────────────
-  app.get('/celulas/:id', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  app.get('/celulas/:id', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
     const celula = await prisma.celula.findUnique({
       where: { id },
@@ -206,24 +206,24 @@ export async function celulaRoutes(app) {
   })
 
   // ── GET /celulas/:id/membros (escopo) ───────────────────────────────────────
-  app.get('/celulas/:id/membros', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  app.get('/celulas/:id/membros', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
     const celula = await prisma.celula.findUnique({ where: { id } })
     if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
     if (!podeGerenciarCelula(request.usuario, celula)) {
       return reply.code(403).send({ erro: 'Sem permissão' })
     }
-    const soAtivos = request.usuario.papel !== 'ADMIN'
+    const soAtivos = !ehAdmin(request.usuario.nivelAcesso)
     const membros = await prisma.user.findMany({
       where: { celulaId: id, ...(soAtivos ? { ativo: true } : {}) },
       orderBy: { nome: 'asc' },
-      select: { id: true, nome: true, email: true, avatar: true, papel: true, ativo: true, whatsapp: true }
+      select: { id: true, nome: true, email: true, avatar: true, nivelAcesso: true, qualificacao: true, ativo: true, whatsapp: true }
     })
     return reply.send({ membros })
   })
 
   // ── PUT /celulas/:id (escopo) ───────────────────────────────────────────────
-  app.put('/celulas/:id', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  app.put('/celulas/:id', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
     const celula = await prisma.celula.findUnique({ where: { id } })
     if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
@@ -315,21 +315,21 @@ export async function celulaRoutes(app) {
         })
       }
 
-      // Rebaixa o líder anterior a MEMBRO (se houver e for diferente).
-      // Um ADMIN nunca é rebaixado: `papel: { not: 'ADMIN' }` preserva o topo da hierarquia.
+      // Rebaixa a QUALIFICAÇÃO do líder anterior a MEMBRO (se houver e for diferente).
+      // Um nível ADMIN+ nunca é mexido: `nivelAcesso: 'USUARIO'` restringe a usuários comuns.
       if (celula.liderId && celula.liderId !== userId) {
         await tx.user.updateMany({
-          where: { id: celula.liderId, papel: { not: 'ADMIN' } },
-          data: { papel: 'MEMBRO', celulaId: null }
+          where: { id: celula.liderId, nivelAcesso: 'USUARIO' },
+          data: { qualificacao: 'MEMBRO', celulaId: null }
         })
       }
 
-      // Promove o novo líder. Se já for ADMIN, mantém o papel (ADMIN > LIDER)
-      // e continua global (celulaId null) — o vínculo fica só em celula.liderId.
-      if (novoLider.papel !== 'ADMIN') {
+      // Promove o novo líder (qualificação LÍDER). Se já for nível ADMIN+, mantém e
+      // continua global (celulaId null) — o vínculo fica só em celula.liderId.
+      if (!ehAdmin(novoLider.nivelAcesso)) {
         await tx.user.update({
           where: { id: userId },
-          data: { papel: 'LIDER', celulaId: id }
+          data: { qualificacao: 'LIDER', celulaId: id }
         })
       }
 
@@ -352,10 +352,10 @@ export async function celulaRoutes(app) {
     // `celulaId: null` torna o handler autossuficiente (não depende só do SetNull do schema).
     await prisma.$transaction(async (tx) => {
       if (celula.liderId) {
-        // ADMIN nunca é rebaixado (`papel: { not: 'ADMIN' }`).
+        // Nível ADMIN+ nunca é mexido (`nivelAcesso: 'USUARIO'`).
         await tx.user.updateMany({
-          where: { id: celula.liderId, papel: { not: 'ADMIN' } },
-          data: { papel: 'MEMBRO', celulaId: null }
+          where: { id: celula.liderId, nivelAcesso: 'USUARIO' },
+          data: { qualificacao: 'MEMBRO', celulaId: null }
         })
       }
       await tx.celula.delete({ where: { id } })

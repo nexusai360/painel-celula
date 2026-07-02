@@ -1,9 +1,9 @@
 import { prisma } from '../prisma.js'
-import { requireRole, temNivel } from '../lib/roles.js'
+import { requireRole, requireGestor, ehAdmin, ehGestorQualificacao } from '../lib/roles.js'
 
 export async function notificacaoRoutes(app) {
   // Lista as notificações visíveis ao usuário + contagem de não lidas.
-  app.get('/notificacoes', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.get('/notificacoes', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     const u = request.usuario
     const or = [{ escopo: 'GLOBAL' }]
     if (u.celulaId) or.push({ escopo: 'CELULA', celulaId: u.celulaId })
@@ -16,17 +16,17 @@ export async function notificacaoRoutes(app) {
       id: i.id, titulo: i.titulo, corpo: i.corpo, escopo: i.escopo, criadoEm: i.criadoEm,
       autorNome: nomePorId[i.autorId] || null, lida: new Date(i.criadoEm).getTime() <= corte
     }))
-    return reply.send({ notificacoes: lista, naoLidas: lista.filter((n) => !n.lida).length, podeEnviar: temNivel(u.papel, 'LIDER') })
+    return reply.send({ notificacoes: lista, naoLidas: lista.filter((n) => !n.lida).length, podeEnviar: ehAdmin(u.nivelAcesso) || ehGestorQualificacao(u.qualificacao) })
   })
 
   // Marca todas como lidas.
-  app.post('/notificacoes/ler', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.post('/notificacoes/ler', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     await prisma.user.update({ where: { id: request.usuario.id }, data: { notificacoesLidasEm: new Date() } })
     return reply.send({ ok: true })
   })
 
   // Envia notificação. ADMIN+: GLOBAL (ou CELULA de qualquer célula). LÍDER: só CELULA da própria célula.
-  app.post('/notificacoes', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  app.post('/notificacoes', { preHandler: requireGestor() }, async (request, reply) => {
     const u = request.usuario
     const titulo = String(request.body?.titulo || '').trim()
     const corpo = String(request.body?.corpo || '').trim()
@@ -35,10 +35,10 @@ export async function notificacaoRoutes(app) {
 
     let celulaId = null
     if (escopo === 'GLOBAL') {
-      if (!temNivel(u.papel, 'ADMIN')) return reply.code(403).send({ erro: 'Só admin envia aviso global' })
+      if (!ehAdmin(u.nivelAcesso)) return reply.code(403).send({ erro: 'Só admin envia aviso global' })
     } else {
       // CELULA
-      if (temNivel(u.papel, 'ADMIN')) {
+      if (ehAdmin(u.nivelAcesso)) {
         celulaId = request.body?.celulaId || u.celulaId
         if (!celulaId) return reply.code(400).send({ erro: 'Informe a célula' })
       } else {

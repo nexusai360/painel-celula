@@ -1,8 +1,8 @@
 import { prisma } from '../prisma.js'
-import { requireRole } from '../lib/roles.js'
+import { requireGestor } from '../lib/roles.js'
 
 export async function testemunhoRoutes(app) {
-  app.get('/testemunhos', { preHandler: requireRole('LIDER') }, async (request) => {
+  app.get('/testemunhos', { preHandler: requireGestor() }, async (request) => {
     const celula = await prisma.celula.findFirst({ where: { liderId: request.usuario.id } })
     if (!celula) return { testemunhos: [] }
     const testemunhos = await prisma.testemunho.findMany({
@@ -19,7 +19,7 @@ export async function testemunhoRoutes(app) {
     }
   })
 
-  app.post('/testemunhos/:id/concluir', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  app.post('/testemunhos/:id/concluir', { preHandler: requireGestor() }, async (request, reply) => {
     const celula = await prisma.celula.findFirst({ where: { liderId: request.usuario.id } })
     if (!celula) return reply.code(404).send({ erro: 'Testemunho não encontrado' })
     const t = await prisma.testemunho.findUnique({ where: { id: request.params.id } })

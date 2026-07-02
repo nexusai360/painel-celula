@@ -5,7 +5,7 @@ import { requireRole } from '../lib/roles.js'
 import { COM_CELULA, comCelula } from '../lib/usuarios.js'
 
 function assinarToken(app, user) {
-  return app.jwt.sign({ id: user.id, papel: user.papel, celulaId: user.celulaId })
+  return app.jwt.sign({ id: user.id, nivelAcesso: user.nivelAcesso, celulaId: user.celulaId })
 }
 
 export async function authRoutes(app) {
@@ -31,7 +31,7 @@ export async function authRoutes(app) {
     // nasce PENDENTE — auto-login, mas travado até um líder/admin aprovar.
     const viaQr = !!qrToken
     const user = await prisma.user.create({
-      data: { nome, email, senhaHash: await hashSenha(senha), papel: 'MEMBRO', celulaId, aprovado: viaQr },
+      data: { nome, email, senhaHash: await hashSenha(senha), nivelAcesso: 'USUARIO', qualificacao: 'MEMBRO', celulaId, aprovado: viaQr },
       ...COM_CELULA
     })
     return reply.code(201).send({
@@ -65,7 +65,7 @@ export async function authRoutes(app) {
     return reply.send({ token: assinarToken(app, atualizado), usuario: comCelula(atualizado) })
   })
 
-  app.get('/auth/me', { preHandler: requireRole('MEMBRO', { permitirPendente: true }) }, async (request, reply) => {
+  app.get('/auth/me', { preHandler: requireRole('USUARIO', { permitirPendente: true }) }, async (request, reply) => {
     const user = await prisma.user.findUnique({ where: { id: request.usuario.id }, ...COM_CELULA })
     if (!user) return reply.code(404).send({ erro: 'Usuário não encontrado' })
     return reply.send({ usuario: comCelula(user) })

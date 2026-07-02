@@ -11,7 +11,7 @@ function magicJpegOk(dataUrl) {
 
 export async function perfilRoutes(app) {
   app.put('/perfil', {
-    preHandler: requireRole('MEMBRO', { permitirPendente: true }),
+    preHandler: requireRole('USUARIO', { permitirPendente: true }),
     bodyLimit: 700 * 1024
   }, async (request, reply) => {
     const parsed = perfilUpdateSchema.safeParse(request.body)
@@ -48,7 +48,7 @@ export async function perfilRoutes(app) {
 
   // Seleção de célula pelo próprio usuário (onboarding). Permitido a pendentes.
   // Só define quando ainda não há célula (evita "pular" de célula depois).
-  app.post('/perfil/celula', { preHandler: requireRole('MEMBRO', { permitirPendente: true }) }, async (request, reply) => {
+  app.post('/perfil/celula', { preHandler: requireRole('USUARIO', { permitirPendente: true }) }, async (request, reply) => {
     const celulaId = request.body?.celulaId
     if (!celulaId || typeof celulaId !== 'string') return reply.code(400).send({ erro: 'Célula inválida' })
 
@@ -68,7 +68,7 @@ export async function perfilRoutes(app) {
   const perfilPublico = { id: true, nome: true, email: true, avatar: true }
 
   // Estado atual: cônjuge vinculado, convites recebidos e convite enviado pendente.
-  app.get('/perfil/conjuge', { preHandler: requireRole('MEMBRO', pendente) }, async (request, reply) => {
+  app.get('/perfil/conjuge', { preHandler: requireRole('USUARIO', pendente) }, async (request, reply) => {
     const meuId = request.usuario.id
     const eu = await prisma.user.findUnique({ where: { id: meuId }, select: { conjugeId: true } })
     const conjuge = eu?.conjugeId
@@ -89,7 +89,7 @@ export async function perfilRoutes(app) {
   })
 
   // Convida o cônjuge pelo e-mail exato (sem busca aberta).
-  app.post('/perfil/conjuge', { preHandler: requireRole('MEMBRO', pendente) }, async (request, reply) => {
+  app.post('/perfil/conjuge', { preHandler: requireRole('USUARIO', pendente) }, async (request, reply) => {
     const meuId = request.usuario.id
     const email = String(request.body?.email || '').trim()
     if (!email) return reply.code(400).send({ erro: 'Informe o e-mail' })
@@ -120,7 +120,7 @@ export async function perfilRoutes(app) {
     ])
   }
 
-  app.post('/perfil/conjuge/:id/aceitar', { preHandler: requireRole('MEMBRO', pendente) }, async (request, reply) => {
+  app.post('/perfil/conjuge/:id/aceitar', { preHandler: requireRole('USUARIO', pendente) }, async (request, reply) => {
     const meuId = request.usuario.id
     const sol = await prisma.conjugeSolicitacao.findUnique({ where: { id: request.params.id } })
     if (!sol || sol.alvoId !== meuId || sol.status !== 'PENDENTE') return reply.code(404).send({ erro: 'Convite não encontrado' })
@@ -128,7 +128,7 @@ export async function perfilRoutes(app) {
     return reply.send({ ok: true })
   })
 
-  app.post('/perfil/conjuge/:id/recusar', { preHandler: requireRole('MEMBRO', pendente) }, async (request, reply) => {
+  app.post('/perfil/conjuge/:id/recusar', { preHandler: requireRole('USUARIO', pendente) }, async (request, reply) => {
     const meuId = request.usuario.id
     const sol = await prisma.conjugeSolicitacao.findUnique({ where: { id: request.params.id } })
     if (!sol || sol.alvoId !== meuId) return reply.code(404).send({ erro: 'Convite não encontrado' })
@@ -137,7 +137,7 @@ export async function perfilRoutes(app) {
   })
 
   // Desfaz o vínculo (dos dois lados).
-  app.delete('/perfil/conjuge', { preHandler: requireRole('MEMBRO', pendente) }, async (request, reply) => {
+  app.delete('/perfil/conjuge', { preHandler: requireRole('USUARIO', pendente) }, async (request, reply) => {
     const meuId = request.usuario.id
     const eu = await prisma.user.findUnique({ where: { id: meuId }, select: { conjugeId: true } })
     if (!eu?.conjugeId) return reply.send({ ok: true })

@@ -3,7 +3,7 @@ import { prisma } from '../prisma.js'
 import { requireRole } from '../lib/roles.js'
 
 export async function pedidoRoutes(app) {
-  app.get('/pedidos', { preHandler: requireRole('MEMBRO') }, async (request) => {
+  app.get('/pedidos', { preHandler: requireRole('USUARIO') }, async (request) => {
     const pedidos = await prisma.pedidoOracao.findMany({
       where: { userId: request.usuario.id },
       orderBy: { criadoEm: 'desc' },
@@ -17,7 +17,7 @@ export async function pedidoRoutes(app) {
     }
   })
 
-  app.post('/pedidos', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.post('/pedidos', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     const parsed = pedidoCreateSchema.safeParse(request.body)
     if (!parsed.success) return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
     const { titulo, detalhes, testemunhar } = parsed.data
@@ -41,7 +41,7 @@ export async function pedidoRoutes(app) {
     return reply.code(201).send({ pedido })
   })
 
-  app.put('/pedidos/:id', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.put('/pedidos/:id', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     const parsed = pedidoUpdateSchema.safeParse(request.body)
     if (!parsed.success) return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
     const existente = await prisma.pedidoOracao.findUnique({ where: { id: request.params.id } })
@@ -53,14 +53,14 @@ export async function pedidoRoutes(app) {
     return { pedido }
   })
 
-  app.delete('/pedidos/:id', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.delete('/pedidos/:id', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     const existente = await prisma.pedidoOracao.findUnique({ where: { id: request.params.id } })
     if (!existente || existente.userId !== request.usuario.id) return reply.code(404).send({ erro: 'Pedido não encontrado' })
     await prisma.pedidoOracao.delete({ where: { id: existente.id } })
     return reply.code(204).send()
   })
 
-  app.post('/pedidos/:id/testemunho', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.post('/pedidos/:id/testemunho', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     const existente = await prisma.pedidoOracao.findUnique({
       where: { id: request.params.id }, include: { testemunho: true }
     })

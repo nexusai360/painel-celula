@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { prisma } from '../prisma.js'
-import { requireRole } from '../lib/roles.js'
+import { requireRole, requireGestor } from '../lib/roles.js'
 import { podeGerenciarCelula } from '../lib/escopo.js'
 import { materializarEncontros } from '../lib/encontros.service.js'
 import { sincronizarEncontro, sincronizarMembro } from '../lib/sync/calendarSync.js'
@@ -24,24 +24,17 @@ const estenderSchema = z.object({
 
 export async function encontroRoutes(app) {
   // ── GET /celulas/:id/encontros (MEMBRO+, com escopo) ───────────────────────
-  app.get('/celulas/:id/encontros', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.get('/celulas/:id/encontros', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     const { id } = request.params
     const usuario = request.usuario
 
     const celula = await prisma.celula.findUnique({ where: { id } })
     if (!celula) return reply.code(404).send({ erro: 'Célula não encontrada' })
 
-    // Scoping: ADMIN can see any; LIDER only own cell; MEMBRO only if member of cell
-    if (usuario.papel === 'LIDER') {
-      if (!podeGerenciarCelula(usuario, celula)) {
-        return reply.code(403).send({ erro: 'Sem permissão' })
-      }
-    } else if (usuario.papel === 'MEMBRO') {
-      if (usuario.celulaId !== id) {
-        return reply.code(403).send({ erro: 'Sem permissão' })
-      }
+    // Scoping: ADMIN+ e líder da célula gerenciam (podeGerenciarCelula); membro só se for da célula.
+    if (!podeGerenciarCelula(usuario, celula) && usuario.celulaId !== id) {
+      return reply.code(403).send({ erro: 'Sem permissão' })
     }
-    // ADMIN: always allowed
 
     const { desde, ate } = request.query
     const where = { celulaId: id }
@@ -72,7 +65,7 @@ export async function encontroRoutes(app) {
   })
 
   // ── PUT /encontros/:id (LIDER+, com escopo) ────────────────────────────────
-  app.put('/encontros/:id', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  app.put('/encontros/:id', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
 
     const parsed = updateEncontroSchema.safeParse(request.body)
@@ -110,7 +103,7 @@ export async function encontroRoutes(app) {
 
   // ── POST /celulas/:id/encontros/estender (LIDER+, com escopo) ─────────────
   // Registrado ANTES da rota avulsa para ter precedência sobre o segmento literal 'estender'
-  app.post('/celulas/:id/encontros/estender', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  app.post('/celulas/:id/encontros/estender', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
 
     const celula = await prisma.celula.findUnique({ where: { id } })
@@ -147,7 +140,7 @@ export async function encontroRoutes(app) {
     return reply.send({ criados })
   })
 
-  app.post('/celulas/:id/encontros', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+  app.post('/celulas/:id/encontros', { preHandler: requireGestor() }, async (request, reply) => {
     const { id } = request.params
 
     const celula = await prisma.celula.findUnique({ where: { id } })

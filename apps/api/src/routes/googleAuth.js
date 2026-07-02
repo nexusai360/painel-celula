@@ -9,7 +9,7 @@ import { requireRole } from '../lib/roles.js'
 const contextoSchema = z.enum(['login', 'conectar'])
 
 function assinarToken(app, user) {
-  return app.jwt.sign({ id: user.id, papel: user.papel, celulaId: user.celulaId })
+  return app.jwt.sign({ id: user.id, nivelAcesso: user.nivelAcesso, celulaId: user.celulaId })
 }
 
 export async function googleAuthRoutes(app) {
@@ -105,7 +105,8 @@ export async function googleAuthRoutes(app) {
         data: {
           nome: perfil.nome,
           email: perfil.email,
-          papel: 'MEMBRO',
+          nivelAcesso: 'USUARIO',
+          qualificacao: 'MEMBRO',
           celulaId,
           googleSub: perfil.sub
         }
@@ -160,7 +161,7 @@ export async function googleAuthRoutes(app) {
   })
 
   // DELETE /google — disconnect Google integration
-  app.delete('/google', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.delete('/google', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     if (!googleHabilitado()) {
       return reply.code(503).send({ erro: 'Integração Google não configurada' })
     }

@@ -3,7 +3,7 @@ import { requireRole } from '../lib/roles.js'
 
 export async function bannerRoutes(app) {
   // Banner ativo (qualquer usuário aprovado vê).
-  app.get('/banner', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.get('/banner', { preHandler: requireRole('USUARIO') }, async (request, reply) => {
     const b = await prisma.banner.findFirst({ where: { ativo: true }, orderBy: { atualizadoEm: 'desc' } })
     return reply.send({ banner: b ? { mensagem: b.mensagem } : null })
   })
