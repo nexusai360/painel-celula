@@ -195,6 +195,34 @@ export function AbaPendentes({ eu }) {
   )
 }
 
+const HINT_STATUS = {
+  PENDENTE: 'clique para aprovar',
+  ATIVO: 'clique para inativar',
+  INATIVO: 'clique para ativar',
+  REPROVADO: 'clique para reativar',
+}
+
+// Status = 1 ícone que, no hover, expande mostrando a tag + a ação. Clique executa.
+function StatusControl({ status, onClick, ocupado }) {
+  const c = CORES_STATUS[status]
+  const Ic = c.icon
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={ocupado}
+      title={`${c.label} — ${HINT_STATUS[status]}`}
+      aria-label={`${c.label}. ${HINT_STATUS[status]}`}
+      className={`group inline-flex shrink-0 items-center rounded-full border p-1.5 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${c.chip}`}
+    >
+      <Ic className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 group-hover:ml-1.5 group-hover:max-w-[240px] group-hover:opacity-100">
+        {c.label} · {HINT_STATUS[status]}
+      </span>
+    </button>
+  )
+}
+
 function AbaTodos({ eu }) {
   const toast = useToast()
   const [lista, setLista] = useState(null)
@@ -222,12 +250,24 @@ function AbaTodos({ eu }) {
     } catch (e) { toast.erro(e?.response?.data?.erro || 'Não foi possível alterar o nível.') }
     finally { setOcupado(null) }
   }
-  async function alternarAtivo(u) {
+  async function acaoStatus(u) {
+    const st = statusDeUsuario(u)
     setOcupado(u.id)
     try {
-      const r = await apiAtualizarUsuarioAtivo(u.id, !u.ativo)
-      setLista((l) => l.map((x) => (x.id === u.id ? { ...x, ativo: r.ativo } : x)))
-      toast.sucesso(r.ativo ? 'Usuário reativado.' : 'Usuário desativado.')
+      if (st === 'PENDENTE') {
+        await apiAprovarUsuario(u.id)
+        setLista((l) => l.map((x) => (x.id === u.id ? { ...x, aprovado: true, ativo: true } : x)))
+        toast.sucesso('Usuário aprovado.')
+      } else if (st === 'REPROVADO') {
+        await apiAprovarUsuario(u.id)
+        await apiAtualizarUsuarioAtivo(u.id, true)
+        setLista((l) => l.map((x) => (x.id === u.id ? { ...x, aprovado: true, ativo: true, papel: 'MEMBRO' } : x)))
+        toast.sucesso('Usuário reativado como membro.')
+      } else {
+        const r = await apiAtualizarUsuarioAtivo(u.id, !u.ativo)
+        setLista((l) => l.map((x) => (x.id === u.id ? { ...x, ativo: r.ativo } : x)))
+        toast.sucesso(r.ativo ? 'Usuário reativado.' : 'Usuário desativado.')
+      }
     } catch (e) { toast.erro(e?.response?.data?.erro || 'Não foi possível alterar o status.') }
     finally { setOcupado(null) }
   }
@@ -268,29 +308,20 @@ function AbaTodos({ eu }) {
                   </p>
                   <p className="truncate text-sm text-text-muted">{u.email}</p>
                 </div>
-                <div className="shrink-0">
-                  <RoleSelect
-                    value={u.papel}
-                    opcoes={opcoes}
-                    readOnly={souEu || opcoes.length <= 1 || ocupado === u.id}
-                    onChange={(p) => trocarPapel(u, p)}
-                  />
-                </div>
-                {/* Status É o controle: um único chip que liga/desliga o usuário */}
+                {/* Reprovado não tem nível; os demais mostram o seletor de papel */}
+                {statusDeUsuario(u) !== 'REPROVADO' && (
+                  <div className="shrink-0">
+                    <RoleSelect
+                      value={u.papel}
+                      opcoes={opcoes}
+                      readOnly={souEu || opcoes.length <= 1 || ocupado === u.id}
+                      onChange={(p) => trocarPapel(u, p)}
+                    />
+                  </div>
+                )}
+                {/* Status É o controle: 1 ícone que expande no hover e age no clique */}
                 {podeAgir ? (
-                  <button
-                    type="button"
-                    onClick={() => alternarAtivo(u)}
-                    disabled={ocupado === u.id}
-                    title={u.ativo ? 'Ativo — clique para desativar' : 'Inativo — clique para ativar'}
-                    className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all hover:opacity-80 disabled:opacity-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${CORES_STATUS[statusDeUsuario(u)].chip}`}
-                  >
-                    {(() => {
-                      const c = CORES_STATUS[statusDeUsuario(u)]
-                      const Ic = c.icon
-                      return <><Ic className="h-3.5 w-3.5" aria-hidden="true" />{c.label}<Power className="ml-0.5 h-3 w-3 opacity-60" aria-hidden="true" /></>
-                    })()}
-                  </button>
+                  <StatusControl status={statusDeUsuario(u)} ocupado={ocupado === u.id} onClick={() => acaoStatus(u)} />
                 ) : (
                   <StatusBadge status={statusDeUsuario(u)} />
                 )}

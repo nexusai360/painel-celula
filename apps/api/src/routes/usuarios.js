@@ -43,7 +43,7 @@ export async function usuarioRoutes(app) {
   // Lista contas pendentes: ADMIN+ vê todas; LÍDER vê só as da própria célula.
   app.get('/usuarios/pendentes', { preHandler: requireRole('LIDER') }, async (request, reply) => {
     const admin = temNivel(request.usuario.papel, 'ADMIN')
-    const where = { aprovado: false, ...(admin ? {} : { celulaId: request.usuario.celulaId }) }
+    const where = { aprovado: false, ativo: true, ...(admin ? {} : { celulaId: request.usuario.celulaId }) }
     const usuarios = await prisma.user.findMany({
       where,
       orderBy: { criadoEm: 'asc' },
@@ -87,8 +87,9 @@ export async function usuarioRoutes(app) {
     if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
     if (alvo.aprovado) return reply.code(400).send({ erro: 'Conta já aprovada; use desativar.' })
     if (!podeGerenciarPendente(request.usuario, alvo)) return reply.code(403).send({ erro: 'Sem permissão' })
-    await prisma.user.delete({ where: { id } })
-    return reply.send({ ok: true })
+    // Reprovar = soft (mantém na lista como REPROVADO, sem nível). Reativar depois volta a Membro.
+    const user = await prisma.user.update({ where: { id }, data: { ativo: false, papel: 'MEMBRO' } })
+    return reply.send({ usuario: publico(user) })
   })
 
   // Edita um membro (ADMIN): nome, email, whatsapp, ativo. Soft-delete via ativo:false.
