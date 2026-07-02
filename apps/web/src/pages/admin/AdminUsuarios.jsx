@@ -21,7 +21,7 @@ import { formatarWhatsapp, whatsappValido } from '../../lib/whatsapp.js'
 import {
   apiUsuariosPendentes, apiAprovarUsuario, apiRecusarUsuario, apiListarUsuarios,
   apiAtualizarQualificacao, apiAtualizarNivel, apiAtualizarUsuario, apiAtualizarUsuarioAtivo,
-  apiRedefinirSenha,
+  apiRedefinirSenha, apiCriarUsuario,
 } from '../../lib/api.js'
 
 const LEGENDA_QUALIF = [
@@ -457,6 +457,84 @@ function AbaTodos({ eu }) {
   )
 }
 
+// ── Criar usuário (admin) ─────────────────────────────────────────────────────
+function AbaCriar({ eu, onCriado }) {
+  const toast = useToast()
+  const vazio = { nome: '', email: '', senha: '', whatsapp: '' }
+  const [form, setForm] = useState(vazio)
+  const [qualif, setQualif] = useState('MEMBRO')
+  const [nivel, setNivel] = useState('USUARIO')
+  const [erros, setErros] = useState({})
+  const [salvando, setSalvando] = useState(false)
+
+  const opcoesQualif = opcoesDeQualificacao(eu?.nivelAcesso, eu?.qualificacao)
+  const opcoesNivel = opcoesDeNivel(eu?.nivelAcesso, 'USUARIO')
+  const set = (campo) => (e) => setForm((f) => ({ ...f, [campo]: e.target.value }))
+
+  function validar() {
+    const er = {}
+    if (form.nome.trim().length < 2) er.nome = 'Nome muito curto'
+    if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) er.email = 'E-mail inválido'
+    if (form.senha.length < 6) er.senha = 'A senha deve ter ao menos 6 caracteres.'
+    if (!whatsappValido(form.whatsapp)) er.whatsapp = 'Número inválido — use DDD + número (10 ou 11 dígitos).'
+    setErros(er)
+    return Object.keys(er).length === 0
+  }
+
+  async function criar() {
+    if (!validar()) return
+    setSalvando(true)
+    try {
+      const novo = await apiCriarUsuario({
+        nome: form.nome.trim(),
+        email: form.email.trim(),
+        senha: form.senha,
+        whatsapp: form.whatsapp.replace(/\D/g, '') || null,
+        qualificacao: qualif,
+        nivelAcesso: nivel,
+      })
+      toast.sucesso('Usuário criado e já ativo.')
+      setForm(vazio); setQualif('MEMBRO'); setNivel('USUARIO'); setErros({})
+      onCriado?.(novo)
+    } catch (e) {
+      toast.erro(e?.response?.data?.erro || 'Não foi possível criar o usuário.')
+    } finally { setSalvando(false) }
+  }
+
+  return (
+    <div className="mx-auto max-w-xl rounded-2xl border border-border bg-card p-5 sm:p-6">
+      <p className="mb-5 text-sm text-text-muted">
+        A conta nasce <span className="font-medium text-text">aprovada e ativa</span>. Entregue o e-mail e a senha à pessoa.
+      </p>
+      <div className="space-y-4">
+        <Input id="novo-nome" label="Nome" value={form.nome} error={erros.nome} onChange={set('nome')} />
+        <Input id="novo-email" label="E-mail" type="email" autoComplete="off" value={form.email} error={erros.email} onChange={set('email')} />
+        <Input id="novo-senha" label="Senha" type="password" autoComplete="new-password" value={form.senha} error={erros.senha} onChange={set('senha')} />
+        <Input
+          id="novo-wpp" label="WhatsApp" type="tel" inputMode="tel" placeholder="(62) 99999-9999"
+          value={form.whatsapp} error={erros.whatsapp}
+          onChange={(e) => setForm((f) => ({ ...f, whatsapp: mascaraTelefone(e.target.value) }))}
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-text">Qualificação</label>
+            <QualificacaoSelect value={qualif} bloco opcoes={opcoesQualif.length ? opcoesQualif : [qualif]} onChange={setQualif} readOnly={opcoesQualif.length <= 1} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-text">Nível de acesso</label>
+            <NivelSelect value={nivel} bloco opcoes={opcoesNivel} onChange={setNivel} readOnly={opcoesNivel.length <= 1} />
+          </div>
+        </div>
+      </div>
+      <div className="mt-6 flex justify-end">
+        <Button onClick={criar} loading={salvando} className="w-auto px-6">
+          <UserPlus className="h-4 w-4" /> Criar usuário
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminUsuarios() {
   const { usuario: eu } = useAuth()
   const [aba, setAba] = useState('pendentes')
@@ -475,12 +553,16 @@ export default function AdminUsuarios() {
             Pendentes{nPend ? ` (${nPend})` : ''}
           </TabsTrigger>
           <TabsTrigger value="todos">Todos</TabsTrigger>
+          <TabsTrigger value="criar">Criar usuário</TabsTrigger>
         </TabsList>
         <TabsContent value="pendentes">
           <AbaPendentes eu={eu} />
         </TabsContent>
         <TabsContent value="todos">
           <AbaTodos eu={eu} />
+        </TabsContent>
+        <TabsContent value="criar">
+          <AbaCriar eu={eu} onCriado={() => setAba('todos')} />
         </TabsContent>
       </Tabs>
     </>
