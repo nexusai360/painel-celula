@@ -30,7 +30,8 @@ const OPCOES_FREQ = FREQUENCIAS.map((f) => ({ value: f.v, label: f.label }))
 function NovaCelula({ onCriada }) {
   const [aberto, setAberto] = useState(false)
   const [form, setForm] = useState({
-    nome: '', descricao: '', diaSemana: 4, frequenciaDias: 7, dataPrimeiroEncontro: ''
+    nome: '', descricao: '', diaSemana: 4, frequenciaDias: 7, dataPrimeiroEncontro: '',
+    cidade: '', bairro: '', endereco: '', numero: '', complemento: '', pontoReferencia: ''
   })
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -46,9 +47,18 @@ function NovaCelula({ onCriada }) {
         descricao: form.descricao || undefined,
         diaSemana: Number(form.diaSemana),
         frequenciaDias: Number(form.frequenciaDias),
-        dataPrimeiroEncontro: new Date(form.dataPrimeiroEncontro).toISOString()
+        dataPrimeiroEncontro: new Date(form.dataPrimeiroEncontro).toISOString(),
+        cidade: form.cidade || undefined,
+        bairro: form.bairro || undefined,
+        endereco: form.endereco || undefined,
+        numero: form.numero || undefined,
+        complemento: form.complemento || undefined,
+        pontoReferencia: form.pontoReferencia || undefined
       })
-      setForm({ nome: '', descricao: '', diaSemana: 4, frequenciaDias: 7, dataPrimeiroEncontro: '' })
+      setForm({
+        nome: '', descricao: '', diaSemana: 4, frequenciaDias: 7, dataPrimeiroEncontro: '',
+        cidade: '', bairro: '', endereco: '', numero: '', complemento: '', pontoReferencia: ''
+      })
       setAberto(false)
       onCriada()
     } catch (e2) {
@@ -92,6 +102,25 @@ function NovaCelula({ onCriada }) {
           onChange={(v) => set('dataPrimeiroEncontro', v)}
           required
         />
+
+        <div className="border-t border-border pt-4">
+          <p className="mb-3 text-sm font-semibold text-text">Endereço da célula</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input id="cidade" label="Cidade" value={form.cidade} onChange={(e) => set('cidade', e.target.value)} />
+            <Input id="bairro" label="Bairro" value={form.bairro} onChange={(e) => set('bairro', e.target.value)} />
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <div className="sm:col-span-2">
+              <Input id="endereco" label="Endereço" value={form.endereco} onChange={(e) => set('endereco', e.target.value)} />
+            </div>
+            <Input id="numero" label="Número" value={form.numero} onChange={(e) => set('numero', e.target.value)} />
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Input id="complemento" label="Complemento (opcional)" value={form.complemento} onChange={(e) => set('complemento', e.target.value)} />
+            <Input id="pontoReferencia" label="Ponto de referência (opcional)" value={form.pontoReferencia} onChange={(e) => set('pontoReferencia', e.target.value)} />
+          </div>
+        </div>
+
         {erro && <p role="alert" className="text-sm text-danger">{erro}</p>}
         <div className="flex gap-2">
           <Button type="submit" loading={salvando} className="w-auto px-5">Criar</Button>

@@ -107,7 +107,7 @@ ADMIN/SUPER_ADMIN. ADMIN pode gerenciar MEMBRO↔LIDER e (des)ativar contas.
 - [x] Fase 0 — SUPER_ADMIN (enum+migration, dono promovido no boot, regras de edição de papel, front reconhece super admin como admin).
 - [x] Fase 1 — Gestão de usuários (listar todos + busca, trocar nível com regras super/admin, ativar/desativar, legenda de papéis). Bug "não vejo usuários" resolvido.
 - [ ] Fase 2 — Cadastro + seleção de célula + aprovação por líder.
-- [ ] Fase 3 — Endereço da célula.
+- [x] Fase 3 — Endereço da célula (cidade/bairro/endereço/número/complemento/ponto ref; migration aditiva; form de criar célula). Só bairro exposto na seleção (Fase 2).
 - [ ] Fase 4 — Perfil + cônjuge.
 - [ ] Fase 5 — QR presença.
 - [ ] Fase 6 — Notificações + banner.

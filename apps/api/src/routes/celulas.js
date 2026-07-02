@@ -24,13 +24,24 @@ const frequenciaValida = z
   .int()
   .refine((v) => FREQUENCIAS_VALIDAS.includes(v), 'Frequência inválida')
 
+const enderecoFields = {
+  cidade: z.string().optional(),
+  bairro: z.string().optional(),
+  endereco: z.string().optional(),
+  numero: z.string().optional(),
+  complemento: z.string().optional(),
+  pontoReferencia: z.string().optional()
+}
+const CAMPOS_ENDERECO = Object.keys(enderecoFields)
+
 const celulaSchema = z.object({
   nome: z.string().min(1),
   descricao: z.string().optional(),
   diaSemana: z.number().int().min(0).max(6),
   frequenciaDias: frequenciaValida,
   dataPrimeiroEncontro: z.coerce.date(),
-  liderId: z.string().optional()
+  liderId: z.string().optional(),
+  ...enderecoFields
 })
 
 const updateCelulaSchema = z.object({
@@ -39,7 +50,8 @@ const updateCelulaSchema = z.object({
   diaSemana: z.number().int().min(0).max(6).optional(),
   frequenciaDias: frequenciaValida.optional(),
   dataPrimeiroEncontro: z.coerce.date().optional(),
-  ativa: z.boolean().optional()
+  ativa: z.boolean().optional(),
+  ...enderecoFields
 })
 
 export async function celulaRoutes(app) {
@@ -63,6 +75,9 @@ export async function celulaRoutes(app) {
       return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
     }
     const { nome, descricao, diaSemana, frequenciaDias, dataPrimeiroEncontro, liderId } = parsed.data
+    const endereco = Object.fromEntries(
+      CAMPOS_ENDERECO.filter((k) => parsed.data[k] !== undefined).map((k) => [k, parsed.data[k]])
+    )
 
     if (liderId) {
       const lider = await prisma.user.findUnique({ where: { id: liderId } })
@@ -88,7 +103,7 @@ export async function celulaRoutes(app) {
       try {
         celula = await prisma.$transaction(async (tx) => {
           const c = await tx.celula.create({
-            data: { nome, descricao, diaSemana, frequenciaDias, dataPrimeiroEncontro, qrToken, liderId }
+            data: { nome, descricao, diaSemana, frequenciaDias, dataPrimeiroEncontro, qrToken, liderId, ...endereco }
           })
           if (liderId) {
             await tx.user.update({

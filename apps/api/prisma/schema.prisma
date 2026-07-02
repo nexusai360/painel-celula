@@ -63,6 +63,13 @@ model Celula {
   id                   String   @id @default(cuid())
   nome                 String
   descricao            String?
+  // Endereço (básico). Só o bairro aparece na seleção pública de célula.
+  cidade               String?
+  bairro               String?
+  endereco             String?
+  numero               String?
+  complemento          String?
+  pontoReferencia      String?
   qrToken              String   @unique
   diaSemana            Int      // 0=domingo ... 6=sábado
   frequenciaDias       Int      // ex: 7, 14
