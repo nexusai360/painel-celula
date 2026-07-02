@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: `superpowers:executing-plans` (execução inline, checkpoints). Frontend SEMPRE com `ui-ux-pro-max`. Steps em checkbox (`- [ ]`).
 
-**Status:** **plano v2** (v1 → Review 1 [2 lentes] → **v2** → Review 2 → v3). **Spec:** `docs/superpowers/specs/2026-07-02-reforma-ui-rbac-celulas-design.md` (v3).
+**Status:** **plano v3 (FINAL)** (v1 → R1 → v2 → R2 → v3 — segue para implementação). **Spec:** `docs/superpowers/specs/2026-07-02-reforma-ui-rbac-celulas-design.md` (v3).
 
 **Goal:** Reformar UI (prata cromado, nível Insights), RBAC (admin nomeia admin; super = dono) e fluxos (aprovação do líder, seleção de célula, cadastro de célula) sem regressão, cada fase deployável na `main`.
 **Architecture:** Monorepo npm (`apps/api` Fastify+Prisma; `apps/web` React 19+Vite+Tailwind v4, primitivos próprios). Primitivos primeiro, depois RBAC backend (TDD), depois telas por área. Direto na `main`, commits atômicos.
@@ -25,6 +25,15 @@
 - **M4** Task 2.2 removida (admin inativo nem carrega `/me`; fix é operacional em 2.1).
 - **B1/B2** vitest (não jest); schema é `updateCelulaSchema`.
 
+## 0b. Histórico v2 → v3 (incorpora Review 2 do plano)
+- **R2#1 [bloqueante]** Front sem infra de teste React: `apps/web/vitest.config.js` é `environment:'node'`, `include:['test/**/*.test.js']`, **sem jsdom/@testing-library**, e não coleta `src/**`. → nova **Task 0.-1** instala `@testing-library/react`+`jsdom`+`jest-dom`, ajusta `vitest.config.js` (`jsdom`, `include: ['src/**/*.test.{js,jsx}','test/**/*.test.{js,jsx}']`, `setupFiles`). **Local canônico dos testes: co-locado em `src/`.**
+- **R2#2 [bloqueante]** `.refine` recebe Date já coagida (`z.coerce.date`) → `getUTCDay` reintroduz fuso (quarta 21:00 BRT→400). → no **create schema**, `dataPrimeiroEncontro: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)`; refine dá split da string → `new Date(Date.UTC(y,mo-1,d)).getUTCDay()`; **handler** grava `new Date(Date.UTC(y,mo-1,d,hh,mm))` (consistente com materialização). Ver Task 4.2.
+- **R2#3** RBAC único em `@icelula/shared`: mover `podeEditarPapel` para o pacote shared; derivar `opcoesDePapel`/`podeAgirSobre` lá; front e back **importam** (mata a cópia órfã em `Usuarios.jsx:86` e evita divergência). Testar a matriz no shared.
+- **R2#4** Guard `PUT` super↔super: usar `(alvo.papel==='SUPER_ADMIN' && editor!=='SUPER_ADMIN')` (deixa SUPER editar SUPER, coerente com `podeEditarPapel`); teste "SUPER edita SUPER→200".
+- **R2#5** Cortar "alimentar o Sino" (scope creep no modelo `Notificacao`): badge de pendências fica **só** no `ContextSwitcher` + item "Usuários" (satisfaz P8). Sino apenas **preservado** (verificar no browser).
+- **R2#6** Task 0.14 ganha `ErrorState` (variante com "Tentar de novo") — §4.3.8/§8.10.
+- **R2#8** Bug `string→number` **já corrigido no front** (`Celulas.jsx:48-49` usa `Number`); o coerce no backend (4.2) é **hardening** direto na API, não repro pela tela.
+
 ## Global Constraints (verbatim)
 - Direto na `main`; deploy por push; `docker/entrypoint.sh` já roda `prisma:deploy` antes do boot; cada fase deployável.
 - Marca **prata cromada** (`--brand #64748b`/`#b9c1cd`); Inter/Sora; dark por classe.
@@ -37,6 +46,14 @@
 ---
 
 ## FASE 0 — Fundação de UI
+
+### Task 0.-1: Infra de teste React no `apps/web` (R2#1 — bloqueante) — Modify `apps/web/package.json`, `apps/web/vitest.config.js`; Create `apps/web/test/setup.js`
+- [ ] **Step 1:** Instalar devDeps: `npm i -D -w apps/web @testing-library/react @testing-library/dom @testing-library/user-event @testing-library/jest-dom jsdom`.
+- [ ] **Step 2:** `vitest.config.js`: `test:{ environment:'jsdom', globals:true, setupFiles:'./test/setup.js', include:['src/**/*.test.{js,jsx}','test/**/*.test.{js,jsx}'] }`.
+- [ ] **Step 3:** `test/setup.js`: `import '@testing-library/jest-dom'`.
+- [ ] **Step 4:** Smoke test `src/lib/_smoke.test.js` (`expect(1+1).toBe(2)`) + um render trivial com `@testing-library/react` → `npm test -w apps/web` PASS; remover o smoke depois.
+- [ ] **Step 5:** Confirmar que os testes web existentes em `test/*.test.js` continuam verdes sob jsdom.
+- [ ] **Step 6:** Commit `chore(web): infra de teste React (jsdom + testing-library)`.
 
 ### Task 0.0: `index.css` — `.chrome` + util de foco (mover pro início, P10)
 **Files:** Modify `apps/web/src/index.css`.
@@ -54,7 +71,8 @@
 **Files:** Modify `lib/papeis.js`; Test `lib/papeis.test.js`.
 **Interfaces:** `CORES_PAPEL`, `CORES_STATUS` (`{chip,icon,label}`), `ehLider`, `ehGestor`; **`opcoesDePapel(editorPapel, alvoPapel): Papel[]`** (papéis que o editor pode atribuir ao alvo, via `podeEditarPapel`) e **`podeAgirSobre(editorPapel, alvo): boolean`** (pode ativar/desativar/editar: false se alvo é si, super, ou admin quando editor≠super).
 - [ ] Step 1: testes — `ehGestor('LIDER')` true; `CORES_PAPEL.ADMIN.chip` tem `blue`/`text-blue-700 dark:text-blue-400`; `opcoesDePapel('ADMIN','MEMBRO')` inclui `MEMBRO,LIDER,ADMIN` e **não** `SUPER_ADMIN`; `opcoesDePapel('ADMIN','ADMIN')` **não** permite rebaixar (só super); `podeAgirSobre('ADMIN', {papel:'ADMIN',id:'x'})` false; `podeAgirSobre('SUPER_ADMIN',{papel:'ADMIN'})` true.
-- [ ] Step 2: FAIL. Step 3: implementar (reusa `podeEditarPapel` do backend? não — replicar a regra no front como fonte única `lib/papeis.js`). Step 4: PASS. Step 5: Commit `feat(ui): cores/roles + opcoesDePapel/podeAgirSobre`.
+- [ ] Step 2: FAIL. Step 3: `opcoesDePapel`/`podeAgirSobre` **derivam de `podeEditarPapel` importado de `@icelula/shared`** (R2#3 — fonte única; NÃO replicar a regra). `lib/papeis.js` só re-exporta + adiciona cores/ícones. **Remover a cópia órfã** de `podeEditarPapel` em `pages/Usuarios.jsx:86`. Step 4: PASS. Step 5: Commit `feat(ui): cores/roles + opcoesDePapel/podeAgirSobre (via @icelula/shared)`.
+  > Depende da Task 1.1 ter movido `podeEditarPapel` para `@icelula/shared` — se a Fase 1 vier depois, mova o RBAC para o shared já nesta task (a Task 1.1 então só importa).
 
 ### Task 0.3: `lib/mascaras.js` (CEP/telefone) — Create+test
 `mascaraCep`(→`00000-000`), `mascaraTelefone`(→`(00) 00000-0000`), `soDigitos`. Teste com entrada suja. FAIL→impl→PASS→commit.
@@ -90,8 +108,8 @@ Usam `CORES_PAPEL`/`CORES_STATUS`. Super Admin `.chrome`. Teste classes. FAIL→
 ### Task 0.13: `ContextSwitcher.jsx` (P9 spec, usa Sheet mobile) — Create+test
 `<ContextSwitcher contexto onChange podeAdmin temCelula badge/>` — Segmented ícone+rótulo, ativo `.chrome`, aba "Minha célula" disabled se `!temCelula` (F13), badge de pendências no segmento Administração; `<md` colapsa em botão→Sheet; não renderiza se `!podeAdmin`; **limpa preferência no logout** (expor helper `limparContexto(id)`). Teste disabled/onChange/badge. FAIL→impl→PASS→commit.
 
-### Task 0.14: `Skeleton`+`EmptyState` — Create+test
-`<Skeleton/>` (shimmer, reduced-motion, `aria-hidden`), `<SkeletonLinhas n/>`, `<EmptyState icon titulo subtitulo acao/>`. Teste render. FAIL→impl→PASS→commit.
+### Task 0.14: `Skeleton`+`EmptyState`+`ErrorState` (R2#6) — Create+test
+`<Skeleton/>` (shimmer, reduced-motion, `aria-hidden`), `<SkeletonLinhas n/>`, `<EmptyState icon titulo subtitulo acao/>`, `<ErrorState mensagem onRetry/>` (botão "Tentar de novo"). Teste render (incl. `onRetry` chamado no click). FAIL→impl→PASS→commit.
 
 ### Task 0.15: `Toast` + provider — Create+test; Modify `App.jsx`
 `useToast()→{sucesso,erro,info}`, `aria-live=polite`, não rouba foco, auto-dismiss 4s, reduced-motion. Montar `<ToastProvider>` no App. Teste (fake timers). FAIL→impl→PASS→commit.
@@ -102,14 +120,14 @@ Usam `CORES_PAPEL`/`CORES_STATUS`. Super Admin `.chrome`. Teste classes. FAIL→
 
 ## FASE 1 — RBAC / hierarquia (backend)
 
-### Task 1.1: `podeEditarPapel` novo (F6) — Modify `apps/api/src/lib/roles.js`; Test `roles.test.js`
-**Interfaces:** `podeEditarPapel(editor, atual, novo): boolean`.
-- [ ] Step 1: matriz — ADMIN: MEMBRO→LIDER ✓, MEMBRO→ADMIN ✓, ADMIN→MEMBRO ✗, →SUPER ✗, edita SUPER ✗; SUPER: tudo ✓.
-- [ ] Step 2: FAIL. Step 3: implementar (ordem spec §4.1: novo/atual super→super; atual admin→super; novo admin→admin+; default admin+). Step 4: PASS. Step 5: Commit.
+### Task 1.1: `podeEditarPapel` novo em `@icelula/shared` (F6, R2#3) — Modify `packages/shared` (mover a função) + `apps/api/src/lib/roles.js` (re-exporta/importa); Test no shared
+**Interfaces:** `podeEditarPapel(editor, atual, novo): boolean` (fonte única no shared); `opcoesDePapel`/`podeAgirSobre` derivadas (usadas por 0.2).
+- [ ] Step 1: matriz completa no shared — ADMIN: MEMBRO→LIDER ✓, MEMBRO→ADMIN ✓, ADMIN→MEMBRO ✗, →SUPER ✗, edita SUPER ✗; SUPER: tudo ✓ (inclui SUPER→SUPER ✓).
+- [ ] Step 2: FAIL. Step 3: implementar em `@icelula/shared` (ordem spec §4.1: novo/atual super→super; atual admin→super; novo admin→admin+; default admin+); `apps/api/src/lib/roles.js` passa a **importar** do shared (mantém `requireRole`/`temNivel` locais). Step 4: PASS (roles.test.js api verde). Step 5: Commit.
 
 ### Task 1.2: Guard `PUT /usuarios/:id` com self-exempt (A1) — Modify `routes/usuarios.js`; Test
-- [ ] Step 1: testes — ADMIN edita OUTRO admin→403; ADMIN edita SUPER→403; ADMIN **auto-inativa→400** (guard não preempta); ADMIN edita próprio nome→200; SUPER edita admin→200.
-- [ ] Step 2: FAIL (ver que sem self-exempt o teste 400 quebra). Step 3: após `findUnique`, `if (id !== request.usuario.id && (alvo.papel==='SUPER_ADMIN' || (alvo.papel==='ADMIN' && request.usuario.papel!=='SUPER_ADMIN'))) return reply.code(403).send({erro:'Sem permissão'})`. Step 4: PASS + existentes verdes. Step 5: Commit.
+- [ ] Step 1: testes — ADMIN edita OUTRO admin→403; ADMIN edita SUPER→403; **SUPER edita outro SUPER→200** (R2#4); ADMIN **auto-inativa→400** (guard não preempta); ADMIN edita próprio nome→200; SUPER edita admin→200.
+- [ ] Step 2: FAIL (ver que sem self-exempt o teste 400 quebra). Step 3: após `findUnique`, `const ed=request.usuario.papel; if (id !== request.usuario.id && ((alvo.papel==='SUPER_ADMIN' && ed!=='SUPER_ADMIN') || (alvo.papel==='ADMIN' && ed!=='SUPER_ADMIN'))) return reply.code(403).send({erro:'Sem permissão'})` (R2#4: super pode editar super). Step 4: PASS + existentes verdes. Step 5: Commit.
 
 ### Task 1.3: `garantir-super-admin.js` + entrypoint (A3, F4) — Create script; Modify `package.json`, `docker/entrypoint.sh`
 - [ ] Step 1: script: `import { PrismaClient }`; `const prisma=new PrismaClient()`; `const email=process.env.SUPER_ADMIN_EMAIL||'nexusai360@gmail.com'`; `await prisma.user.updateMany({where:{email},data:{papel:'SUPER_ADMIN',ativo:true,aprovado:true}})`; log; `await prisma.$disconnect()`. Não cria do zero.
@@ -140,7 +158,7 @@ Usam `CORES_PAPEL`/`CORES_STATUS`. Super Admin `.chrome`. Teste classes. FAIL→
 - [ ] Step 1: `AdminLayout` (rail lateral `lg+`/abas `<lg`: Usuários·Células·Avisos; `<Outlet/>`; `max-w-6xl`). Step 2: grupo `<Route element={<SoAdmin><AdminLayout/></SoAdmin>}>` com `/app/admin/celulas` (→`Celulas` existente), `/app/admin/avisos` (→`AdminAvisos` novo). **Ainda não** mexer em `/app/usuarios`/`/app/celulas` antigos. Step 3: `AdminAvisos` (reusa `apiBannerAdmin/apiSalvarBanner`; textarea+Checkbox+Salvar+Toast+preview). Step 4: browser. Step 5: Commit.
 
 ### Task 3.3: `ContextSwitcher` + badge de pendências (M1) — Modify `TopBar.jsx`
-- [ ] Step 1: montar `ContextSwitcher` (derivado do papel atual; storage por `usuario.id`; `limparContexto` no logout). Step 2: contagem de pendentes (`apiUsuariosPendentes().length`) alimenta: badge no segmento Administração, item "Usuários" e **Sino** (`NotificacoesSino`). Step 3: links dos dois contextos. Step 4: browser (super/admin/líder/membro). Step 5: Commit.
+- [ ] Step 1: montar `ContextSwitcher` (derivado do papel atual; storage por `usuario.id`; `limparContexto` no logout). Step 2: contagem de pendentes (`apiUsuariosPendentes().length`) alimenta **badge no segmento Administração + item "Usuários"** (R2#5 — **NÃO** tocar no `NotificacoesSino`/modelo `Notificacao`). Step 3: links dos dois contextos. Step 4: browser (super/admin/líder/membro) — **confirmar que o `NotificacoesSino` continua renderizando/funcionando** após montar o switcher no TopBar (§8.11). Step 5: Commit.
 
 ### Task 3.4a: `AdminUsuarios` — aba Pendentes (P6) — Create `pages/admin/AdminUsuarios.jsx`
 **Frontend: `ui-ux-pro-max`.**
@@ -165,7 +183,7 @@ Usam `CORES_PAPEL`/`CORES_STATUS`. Super Admin `.chrome`. Teste classes. FAIL→
 ### Task 4.2: Backend schema — coerção + `cep` + refine coerência (A2, M3, F9) — Modify `schema.prisma`, `routes/celulas.js`; Create migration; Test
 - [ ] Step 1: testes — POST `diaSemana:"3"`→201; POST dia incoerente c/ data→400; **POST quarta 21:00 (BRT) → 201 (sem falso-positivo de fuso)**; PUT parcial (só nome) em célula legada incoerente→200; PUT com `cep`→aceita.
 - [ ] Step 2: FAIL.
-- [ ] Step 3: `schema.prisma` `cep String?`; `npx prisma migrate dev --name cep` (**DB local**; commitar só `migration.sql`). `enderecoFields` compartilhado ganha `cep: z.string().regex(/^\d{5}-?\d{3}$/).optional()` (cobre create+update, M3). `diaSemana/frequenciaDias`→`z.coerce.number()`. `.refine` **só no create schema**, TZ-independente: extrair `[y,mo,d]` de `dataPrimeiroEncontro` (string) e `weekday = new Date(Date.UTC(y,mo-1,d)).getUTCDay()`; exigir `diaSemana===weekday`.
+- [ ] Step 3 (R2#2 — TZ-independente, sem `z.coerce.date` no create): `schema.prisma` `cep String?`; `npx prisma migrate dev --name cep` (**DB local**; commitar só `migration.sql`). `enderecoFields` compartilhado ganha `cep: z.string().regex(/^\d{5}-?\d{3}$/).optional()` (cobre create+update, M3). `diaSemana/frequenciaDias`→`z.coerce.number()`. **No create schema**, `dataPrimeiroEncontro: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)`; `.refine` faz `const [y,mo,d]=data.dataPrimeiroEncontro.slice(0,10).split('-').map(Number); return data.diaSemana===new Date(Date.UTC(y,mo-1,d)).getUTCDay()` (msg "Dia da semana incompatível…"). **No handler**, construir a Date armazenada UTC-pinada: `const [y,mo,d]=...; const [hh,mm]=hora...; const dt=new Date(Date.UTC(y,mo-1,d,hh,mm))` antes de `prisma.celula.create` (consistente com `materializarEncontros`). O `updateCelulaSchema` mantém `z.coerce.date()` opcional e **sem** o refine.
 - [ ] Step 4: PASS + existentes. Step 5: Commit. (Sem `agente schema-changed` — modo main.)
 - [ ] **CHECKPOINT (P9):** migration aplicada; `prisma generate` no build; criar célula funciona (repro do bug → verde).
 
