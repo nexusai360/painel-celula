@@ -336,7 +336,7 @@ export default function CelulaDetalhe() {
           <FrequenciaCard key={`freq-${versao}`} celulaId={celula.id} />
         </div>
       ) : (
-        <MembrosPanel celulaId={celula.id} liderId={celula.liderId} podeGerenciar={ehAdmin} />
+        <MembrosPanel celulaId={celula.id} lideresIds={(celula.lideres || []).map((l) => l.id)} podeGerenciar={ehAdmin} />
       )}
     </>
   )

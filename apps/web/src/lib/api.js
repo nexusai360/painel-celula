@@ -72,8 +72,23 @@ export async function apiExcluirCelula(id) {
   await api.delete(`/celulas/${id}`)
 }
 
-export async function apiDefinirLider(celulaId, userId) {
-  const { data } = await api.post(`/celulas/${celulaId}/lider`, { userId })
+export async function apiAdicionarLider(celulaId, userId) {
+  const { data } = await api.post(`/celulas/${celulaId}/lideres`, { userId })
+  return data.celula
+}
+
+export async function apiRemoverLider(celulaId, userId) {
+  const { data } = await api.delete(`/celulas/${celulaId}/lideres/${userId}`)
+  return data.celula
+}
+
+export async function apiCelulasPendentes() {
+  const { data } = await api.get('/celulas/pendentes')
+  return data.celulas
+}
+
+export async function apiAprovarCelula(id) {
+  const { data } = await api.post(`/celulas/${id}/aprovar`)
   return data.celula
 }
 

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight, Plus, Trash2, UserCog, Users2 } from 'lucide-react'
+import { ChevronRight, Trash2, UserCog, Users2, X, Check, Clock } from 'lucide-react'
 import { Card } from '../components/ui/Card.jsx'
+import { Avatar } from '../components/ui/Avatar.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Input } from '../components/ui/Input.jsx'
 import { Select } from '../components/ui/Select.jsx'
@@ -18,7 +19,10 @@ import {
   apiListarCelulas,
   apiCriarCelula,
   apiExcluirCelula,
-  apiDefinirLider,
+  apiAdicionarLider,
+  apiRemoverLider,
+  apiCelulasPendentes,
+  apiAprovarCelula,
   apiListarUsuarios
 } from '../lib/api.js'
 import { nomeDiaSemana } from '../lib/datas.js'
@@ -49,7 +53,7 @@ const FREQUENCIAS = [
 const OPCOES_DIA = DIAS.map((d) => ({ value: d, label: nomeDiaSemana(d) }))
 const OPCOES_FREQ = FREQUENCIAS.map((f) => ({ value: f.v, label: f.label }))
 
-function NovaCelula({ onCriada }) {
+export function NovaCelula({ onCriada }) {
   const [aberto, setAberto] = useState(false)
   const [form, setForm] = useState({
     nome: '', descricao: '', diaSemana: 4, frequenciaDias: 7, dataPrimeiroEncontro: '',
@@ -173,72 +177,140 @@ function NovaCelula({ onCriada }) {
   )
 }
 
-function DefinirLider({ celula, onDefinido }) {
+// Gerência de MÚLTIPLOS líderes por célula: chips removíveis + busca para adicionar.
+function GerenciarLideres({ celula, onMudou }) {
   const [aberto, setAberto] = useState(false)
   const [busca, setBusca] = useState('')
   const [resultados, setResultados] = useState([])
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
+  const lideres = celula.lideres || []
 
-  async function definir(userId) {
+  async function adicionar(userId) {
     setErro('')
-    try {
-      await apiDefinirLider(celula.id, userId)
-      setAberto(false)
-      onDefinido()
-    } catch (e) {
-      setErro(e?.response?.data?.erro || 'Não foi possível definir o líder.')
-    }
+    try { await apiAdicionarLider(celula.id, userId); setBusca(''); onMudou() }
+    catch (e) { setErro(e?.response?.data?.erro || 'Não foi possível adicionar o líder.') }
+  }
+  async function remover(userId) {
+    setErro('')
+    try { await apiRemoverLider(celula.id, userId); onMudou() }
+    catch (e) { setErro(e?.response?.data?.erro || 'Não foi possível remover o líder.') }
   }
 
   useEffect(() => {
     if (!aberto) return
     setCarregando(true)
     const t = setTimeout(() => {
-      apiListarUsuarios(busca)
-        .then(setResultados)
-        .finally(() => setCarregando(false))
+      apiListarUsuarios(busca).then(setResultados).finally(() => setCarregando(false))
     }, 300)
     return () => clearTimeout(t)
   }, [busca, aberto])
 
-  if (!aberto) {
-    return (
-      <button
-        onClick={() => setAberto(true)}
-        className="inline-flex items-center gap-1 rounded text-xs font-medium text-brand hover:underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-      >
-        <UserCog className="h-3.5 w-3.5" /> Definir líder
-      </button>
-    )
+  return (
+    <div className="mt-3">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {lideres.length === 0 && <Tag variant="neutro">Sem líder</Tag>}
+        {lideres.map((l) => (
+          <span key={l.id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface py-1 pl-1 pr-2 text-xs text-text">
+            <Avatar nome={l.nome} src={l.avatar} size={20} />
+            {l.nome}
+            <button onClick={() => remover(l.id)} aria-label={`Remover ${l.nome}`} className="ml-0.5 text-text-muted hover:text-danger cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-danger rounded-full">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        ))}
+        <button
+          onClick={() => setAberto((o) => !o)}
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-xs font-medium text-brand hover:bg-surface cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <UserCog className="h-3.5 w-3.5" /> Adicionar líder
+        </button>
+      </div>
+      {erro && <p role="alert" className="mt-1.5 text-xs text-danger">{erro}</p>}
+      {aberto && (
+        <div className="mt-2 rounded-xl border border-border p-3">
+          <Input
+            id={`busca-${celula.id}`}
+            aria-label="Buscar usuário por nome ou e-mail"
+            placeholder="Buscar por nome ou e-mail"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+          <div className="mt-2 max-h-44 space-y-1 overflow-auto">
+            {carregando && <Spinner className="py-3" />}
+            {!carregando && resultados.filter((u) => !lideres.some((l) => l.id === u.id)).map((u) => (
+              <button
+                key={u.id}
+                onClick={() => adicionar(u.id)}
+                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-surface cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+              >
+                <span className="text-text">{u.nome}</span>
+                <span className="text-xs text-text-muted">{u.email}</span>
+              </button>
+            ))}
+            {!carregando && resultados.length === 0 && (
+              <p className="py-2 text-center text-xs text-text-muted">Nenhum usuário encontrado.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Fila de aprovação de células criadas por líderes/pastores.
+function PendentesCelulas({ onMudou }) {
+  const toast = useToast()
+  const [lista, setLista] = useState(null)
+  const [ocupado, setOcupado] = useState(null)
+
+  async function carregar() {
+    try { setLista(await apiCelulasPendentes()) } catch { setLista([]) }
+  }
+  useEffect(() => { carregar() }, [])
+
+  async function aprovar(id) {
+    setOcupado(id)
+    try {
+      await apiAprovarCelula(id)
+      setLista((l) => l.filter((c) => c.id !== id))
+      onMudou?.()
+      toast.sucesso('Célula aprovada.')
+    } catch (e) { toast.erro(e?.response?.data?.erro || 'Não foi possível aprovar.') }
+    finally { setOcupado(null) }
   }
 
+  if (!lista) return <Spinner className="py-16" />
+  if (lista.length === 0) {
+    return (
+      <Card className="flex flex-col items-center gap-2 py-10 text-center">
+        <Clock className="h-8 w-8 text-text-muted" />
+        <p className="font-medium text-text">Nenhuma célula aguardando aprovação</p>
+      </Card>
+    )
+  }
   return (
-    <div className="mt-3 rounded-xl border border-border p-3">
-      <Input
-        id={`busca-${celula.id}`}
-        aria-label="Buscar usuário por nome ou e-mail"
-        placeholder="Buscar por nome ou e-mail"
-        value={busca}
-        onChange={(e) => setBusca(e.target.value)}
-      />
-      {erro && <p role="alert" className="mt-2 text-xs text-danger">{erro}</p>}
-      <div className="mt-2 max-h-44 space-y-1 overflow-auto">
-        {carregando && <Spinner className="py-3" />}
-        {!carregando && resultados.map((u) => (
-          <button
-            key={u.id}
-            onClick={() => definir(u.id)}
-            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-surface cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-          >
-            <span className="text-text">{u.nome}</span>
-            <span className="text-xs text-text-muted">{u.email}</span>
-          </button>
-        ))}
-        {!carregando && resultados.length === 0 && (
-          <p className="py-2 text-center text-xs text-text-muted">Nenhum usuário encontrado.</p>
-        )}
-      </div>
+    <div className="space-y-3">
+      {lista.map((c) => (
+        <Card key={c.id}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="font-semibold text-text">{c.nome}</h2>
+              <p className="mt-0.5 text-sm text-text-muted">
+                {nomeDiaSemana(c.diaSemana)} · criada por {c.criadaPor?.nome ?? '—'}
+                {c.lideres?.length ? ` · líder(es): ${c.lideres.map((l) => l.nome).join(', ')}` : ''}
+              </p>
+            </div>
+            <button
+              onClick={() => aprovar(c.id)}
+              disabled={ocupado === c.id}
+              className="brand-grad inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand px-4 text-sm font-semibold text-on-brand shadow-sm disabled:opacity-50 cursor-pointer"
+            >
+              <Check className="h-4 w-4" /> Aprovar célula
+            </button>
+          </div>
+        </Card>
+      ))}
     </div>
   )
 }
@@ -288,10 +360,15 @@ export default function Celulas() {
         <TabsList aria-label="Células">
           <TabsTrigger value="nova">Nova célula</TabsTrigger>
           <TabsTrigger value="todas">Todas as células{celulas?.length ? ` (${celulas.length})` : ''}</TabsTrigger>
+          <TabsTrigger value="pendentes">Aprovações</TabsTrigger>
         </TabsList>
 
         <TabsContent value="nova">
           <NovaCelula onCriada={() => { carregar(); setAba('todas') }} />
+        </TabsContent>
+
+        <TabsContent value="pendentes">
+          <PendentesCelulas onMudou={carregar} />
         </TabsContent>
 
         <TabsContent value="todas">
@@ -317,13 +394,11 @@ export default function Celulas() {
                   <p className="mt-0.5 text-sm text-text-muted">
                     {nomeDiaSemana(c.diaSemana)} · {c._count?.membros ?? 0} membro(s) · {c._count?.encontros ?? 0} encontro(s)
                   </p>
-                  <div className="mt-2">
-                    {c.lider ? (
-                      <Tag variant="brand">Líder: {c.lider.nome}</Tag>
-                    ) : (
-                      <Tag variant="neutro">Sem líder</Tag>
-                    )}
-                  </div>
+                  {c.status === 'PENDENTE' && (
+                    <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                      <Clock className="h-3.5 w-3.5" /> Aguardando aprovação
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={() => setAExcluir(c)}
@@ -333,7 +408,7 @@ export default function Celulas() {
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
-              <DefinirLider celula={c} onDefinido={carregar} />
+              <GerenciarLideres celula={c} onMudou={carregar} />
             </Card>
           ))}
         </div>

@@ -5,7 +5,7 @@ import { MembroCard } from './MembroCard.jsx'
 import { MembroEditModal } from './MembroEditModal.jsx'
 import { ConfirmDialog } from './ui/ConfirmDialog.jsx'
 
-export function MembrosPanel({ celulaId, liderId, podeGerenciar }) {
+export function MembrosPanel({ celulaId, lideresIds = [], podeGerenciar }) {
   const [membros, setMembros] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState(null)
@@ -66,7 +66,7 @@ export function MembrosPanel({ celulaId, liderId, podeGerenciar }) {
           {ordenada.map((m) => (
             <MembroCard
               key={m.id} membro={m}
-              ehLider={m.id === liderId}
+              ehLider={lideresIds.includes(m.id)}
               podeGerenciar={podeGerenciar}
               onEditar={setAEditar}
               onInativar={setAInativar}

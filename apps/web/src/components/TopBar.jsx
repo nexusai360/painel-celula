@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react'
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
-import { CalendarDays, Home, Users2, HandHeart, Sparkles, Heart, Menu, UserCheck } from 'lucide-react'
+import { CalendarDays, Home, Users2, HandHeart, Sparkles, Heart, Menu, UserCheck, PlusCircle } from 'lucide-react'
 import { Logo } from './ui/Logo.jsx'
 import { AvatarMenu } from './AvatarMenu.jsx'
 import { NotificacoesSino } from './NotificacoesSino.jsx'
@@ -24,6 +24,7 @@ export function linksPorPapel(usuario) {
   ]
   if (ehGestorQualificacao(qualificacao)) {
     links.push({ to: `/app/celula/${celulaId}`, label: 'Minha Célula', icon: Users2 })
+    links.push({ to: '/app/nova-celula', label: 'Criar célula', icon: PlusCircle })
     links.push({ to: '/app/aprovacoes', label: 'Aprovações', icon: UserCheck })
     links.push({ to: '/app/testemunhos', label: 'Testemunhos', icon: Sparkles })
     links.push({ to: '/app/vidas', label: 'Vidas', icon: Heart })

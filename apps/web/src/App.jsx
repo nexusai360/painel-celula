@@ -25,6 +25,7 @@ import GoogleSucesso from './pages/GoogleSucesso.jsx'
 import MeusPedidos from './pages/MeusPedidos.jsx'
 import PedidoForm from './pages/PedidoForm.jsx'
 import Testemunhos from './pages/Testemunhos.jsx'
+import NovaCelulaLider from './pages/NovaCelulaLider.jsx'
 import Vidas from './pages/Vidas.jsx'
 import NotFound from './pages/NotFound.jsx'
 
@@ -106,6 +107,7 @@ export default function App() {
               <Route path="/app/pedidos" element={<MeusPedidos />} />
               <Route path="/app/pedidos/novo" element={<PedidoForm />} />
               <Route path="/app/pedidos/:id/editar" element={<PedidoForm />} />
+              <Route path="/app/nova-celula" element={<SoLider><NovaCelulaLider /></SoLider>} />
               <Route path="/app/testemunhos" element={<SoLider><Testemunhos /></SoLider>} />
               <Route path="/app/vidas" element={<SoLider><Vidas /></SoLider>} />
             </Route>
