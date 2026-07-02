@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, Users2, ChevronRight } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useEncontros } from '../context/EncontrosContext.jsx'
 import { proximaReuniao, frequenciaDoMes } from '../lib/proximaReuniao.js'
@@ -30,7 +30,43 @@ export default function AppHome() {
     return () => clearInterval(t)
   }, [])
 
-  // ── Sem célula: estado vazio (membro/líder sem vínculo) ─────────────────
+  const minhasCelulas = usuario?.minhasCelulas ?? []
+
+  // ── Sem vínculo de membro, mas lidera/criou células: seletor de célula ───
+  if (!usuario?.celulaId && minhasCelulas.length > 0) {
+    return (
+      <div className="mx-auto flex max-w-md flex-col gap-4 py-8">
+        <div>
+          <h1 className="text-2xl font-bold text-text" style={{ fontFamily: 'var(--font-display)' }}>
+            Suas células
+          </h1>
+          <p className="mt-1 text-sm text-text-muted">Escolha uma célula para gerenciar.</p>
+        </div>
+        <div className="flex flex-col gap-2">
+          {minhasCelulas.map((c) => (
+            <Link
+              key={c.id}
+              to={`/app/celula/${c.id}`}
+              className="flex items-center gap-3 rounded-[var(--radius-card)] border border-border bg-card px-4 py-4 transition-colors hover:border-brand/40 focus-visible:outline-2 focus-visible:outline-brand focus-visible:outline-offset-2"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/10 text-brand">
+                <Users2 className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold text-text">{c.nome}</span>
+                {c.status === 'PENDENTE' && (
+                  <span className="text-xs text-amber-600 dark:text-amber-400">Aguardando aprovação</span>
+                )}
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Sem célula alguma: estado vazio (membro sem vínculo) ─────────────────
   if (!usuario?.celulaId) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center gap-3 px-4">

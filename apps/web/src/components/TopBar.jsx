@@ -13,17 +13,23 @@ import { useAuth } from '../context/AuthContext.jsx'
 // própria sub-nav (rail) no AdminLayout, então em contexto admin o TopBar mostra
 // só o ContextSwitcher.
 export function linksPorPapel(usuario) {
-  const { qualificacao, celulaId } = usuario || {}
+  const { qualificacao, celulaId, minhasCelulas = [] } = usuario || {}
   if (usuario?.aprovado === false) return []
   if (usuario?.ativo === false) return [] // conta inativa não navega
-  if (!celulaId) return []
-  const links = [
-    { to: '/app', label: 'Início', icon: Home, end: true },
-    { to: '/app/calendario', label: 'Calendário', icon: CalendarDays },
-    { to: '/app/pedidos', label: 'Pedidos', icon: HandHeart },
-  ]
-  if (ehGestorQualificacao(qualificacao)) {
-    links.push({ to: `/app/celula/${celulaId}`, label: 'Minha Célula', icon: Users2 })
+  // "Gestor" para fins de navegação: qualificação ≥ líder OU lidera/criou célula.
+  const ehGestor = ehGestorQualificacao(qualificacao) || minhasCelulas.length > 0
+  const celulaPrincipal = celulaId || minhasCelulas[0]?.id
+  // Sem vínculo de membro nem células próprias e sem qualificação de gestão → sem nav.
+  if (!celulaId && !ehGestor) return []
+
+  const links = []
+  if (celulaId) {
+    links.push({ to: '/app', label: 'Início', icon: Home, end: true })
+    links.push({ to: '/app/calendario', label: 'Calendário', icon: CalendarDays })
+    links.push({ to: '/app/pedidos', label: 'Pedidos', icon: HandHeart })
+  }
+  if (ehGestor) {
+    if (celulaPrincipal) links.push({ to: `/app/celula/${celulaPrincipal}`, label: 'Minha Célula', icon: Users2 })
     links.push({ to: '/app/nova-celula', label: 'Criar célula', icon: PlusCircle })
     links.push({ to: '/app/aprovacoes', label: 'Aprovações', icon: UserCheck })
     links.push({ to: '/app/testemunhos', label: 'Testemunhos', icon: Sparkles })
@@ -48,9 +54,15 @@ export function TopBar() {
   // No contexto admin o rail cuida da navegação; no membro, os links de participante.
   const links = contexto === 'membro' ? linksPorPapel(usuario) : []
 
+  // Participa de célula se é membro (celulaId) OU lidera/criou alguma.
+  const minhasCelulas = usuario?.minhasCelulas ?? []
+  const temCelula = !!usuario?.celulaId || minhasCelulas.length > 0
+
   function trocarContexto(id) {
-    if (id === 'admin') navigate('/app/admin/usuarios')
-    else navigate('/app')
+    if (id === 'admin') { navigate('/app/admin/usuarios'); return }
+    // Membro: vai à home. Só-líder/criador (sem celulaId): abre a célula direto.
+    if (usuario?.celulaId) navigate('/app')
+    else navigate(minhasCelulas.length ? `/app/celula/${minhasCelulas[0].id}` : '/app')
   }
 
   return (
@@ -75,7 +87,7 @@ export function TopBar() {
                   contexto={contexto}
                   onChange={trocarContexto}
                   podeAdmin={podeAdmin}
-                  temCelula={!!usuario?.celulaId}
+                  temCelula={temCelula}
                 />
               </div>
             )}
