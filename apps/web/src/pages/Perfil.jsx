@@ -12,6 +12,7 @@ import { ConjugeSecao } from '../components/ConjugeSecao.jsx'
 import { Input } from '../components/ui/Input.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Checkbox } from '../components/ui/Checkbox.jsx'
+import { DateTimePicker } from '../components/ui/DateTimePicker.jsx'
 import { RoleBadge } from '../components/ui/RoleBadge.jsx'
 import { Card } from '../components/ui/Card.jsx'
 
@@ -22,6 +23,10 @@ export default function Perfil() {
   const [avatarUrl, setAvatarUrl] = useState(usuario?.avatar ?? null)
   const [casadoInicial] = useState(ehCasadoInicial(usuario?.estadoCivil))
   const [casado, setCasado] = useState(ehCasadoInicial(usuario?.estadoCivil))
+  // Data de aniversário fora do react-hook-form (DateTimePicker é controlado; "YYYY-MM-DD").
+  const [dataNascimento, setDataNascimento] = useState(
+    usuario?.dataNascimento ? String(usuario.dataNascimento).slice(0, 10) : '',
+  )
   const [sucesso, setSucesso] = useState(false)
   const [erroGeral, setErroGeral] = useState(null)
 
@@ -35,7 +40,6 @@ export default function Perfil() {
       nome: usuario?.nome ?? '',
       // Pre-fill with the formatted display value; we strip to digits on submit
       whatsapp: formatarWhatsapp(usuario?.whatsapp ?? ''),
-      dataNascimento: usuario?.dataNascimento ? String(usuario.dataNascimento).slice(0, 10) : '',
     },
   })
 
@@ -51,7 +55,7 @@ export default function Perfil() {
         nome: valores.nome,
         whatsapp: whatsappRaw,
         avatar: avatarUrl,
-        dataNascimento: valores.dataNascimento || null,
+        dataNascimento: dataNascimento || null,
       }
       // Só grava estado civil em transição real do checkbox (preserva legado).
       const ec = mapBackEstadoCivil(casadoInicial, casado)
@@ -106,8 +110,8 @@ export default function Perfil() {
               <Input id="nome" label="Nome" autoComplete="name" error={errors.nome?.message} {...register('nome', { required: 'Nome é obrigatório' })} />
               <Input id="whatsapp" label="WhatsApp" type="tel" placeholder="(62) 99999-9999" autoComplete="tel" inputMode="tel" error={errors.whatsapp?.message} {...register('whatsapp')} />
               <div>
-                <Input id="dataNascimento" label="Data de nascimento" type="date" error={errors.dataNascimento?.message} {...register('dataNascimento')} />
-                <p className="mt-1.5 text-xs text-text-muted">Pra te dar os parabéns e orar pela sua vida.</p>
+                <DateTimePicker id="dataNascimento" label="Data de aniversário" mode="date" value={dataNascimento} onChange={setDataNascimento} />
+                <p className="mt-1.5 text-xs text-text-muted">Para te dar os parabéns e orar pela sua vida.</p>
               </div>
               <div>
                 <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-text">E-mail</label>

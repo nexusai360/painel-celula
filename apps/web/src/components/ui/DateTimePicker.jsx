@@ -6,30 +6,75 @@ const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julh
 const DIAS_SEMANA = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom']
 const pad = (n) => String(n).padStart(2, '0')
 
-// value / retorno no formato local "YYYY-MM-DDTHH:mm" (igual ao datetime-local)
+// value / retorno: "YYYY-MM-DDTHH:mm" (datetime) ou "YYYY-MM-DD" (mode="date").
 function parse(value) {
   if (!value) return null
-  const [d, t] = value.split('T')
+  const [d, t] = String(value).split('T')
   const [y, m, day] = d.split('-').map(Number)
   const [h, min] = (t || '00:00').split(':').map(Number)
   if (!y || !m || !day) return null
   return { y, m: m - 1, day, h: h || 0, min: min || 0 }
 }
-function toValue({ y, m, day, h, min }) {
-  return `${y}-${pad(m + 1)}-${pad(day)}T${pad(h)}:${pad(min)}`
+function toValue({ y, m, day, h, min }, ehData) {
+  const data = `${y}-${pad(m + 1)}-${pad(day)}`
+  return ehData ? data : `${data}T${pad(h)}:${pad(min)}`
 }
 function ymd(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
 
-export function DateTimePicker({ value, onChange, label, id, placeholder = 'dd/mm/aaaa, --:--', required = false, className = '' }) {
+// Texto legível a partir do value ("dd/mm/aaaa" ou "dd/mm/aaaa HH:mm").
+function formatarTexto(value, ehData) {
+  const p = parse(value)
+  if (!p) return ''
+  const data = `${pad(p.day)}/${pad(p.m + 1)}/${p.y}`
+  return ehData ? data : `${data} ${pad(p.h)}:${pad(p.min)}`
+}
+
+// Aplica máscara enquanto digita: dd/mm/aaaa [HH:mm].
+function mascarar(bruto, ehData) {
+  const dig = String(bruto).replace(/\D/g, '').slice(0, ehData ? 8 : 12)
+  let out = ''
+  for (let i = 0; i < dig.length; i++) {
+    if (i === 2 || i === 4) out += '/'
+    if (i === 8) out += ' '
+    if (i === 10) out += ':'
+    out += dig[i]
+  }
+  return out
+}
+
+// Converte o texto digitado em value válido, ou null se incompleto/inválido.
+function parseTexto(texto, ehData) {
+  const dig = String(texto).replace(/\D/g, '')
+  if (ehData ? dig.length < 8 : dig.length < 12) return null
+  const day = +dig.slice(0, 2)
+  const m = +dig.slice(2, 4)
+  const y = +dig.slice(4, 8)
+  const h = ehData ? 0 : +dig.slice(8, 10)
+  const min = ehData ? 0 : +dig.slice(10, 12)
+  if (m < 1 || m > 12 || day < 1 || day > 31 || y < 1900 || h > 23 || min > 59) return null
+  // valida dia real do mês
+  if (day > new Date(y, m, 0).getDate()) return null
+  return toValue({ y, m: m - 1, day, h, min }, ehData)
+}
+
+export function DateTimePicker({ value, onChange, label, id, placeholder, required = false, className = '', mode = 'datetime' }) {
+  const ehData = mode === 'date'
   const autoId = useId()
   const campoId = id || autoId
   const raiz = useRef(null)
   const [aberto, setAberto] = useState(false)
+  const [texto, setTexto] = useState(() => formatarTexto(value, ehData))
+  const [focado, setFocado] = useState(false)
 
   const parsed = parse(value)
   const hoje = new Date()
+  const ph = placeholder ?? (ehData ? 'dd/mm/aaaa' : 'dd/mm/aaaa --:--')
 
-  // Estado interno do popover (só aplica no "Aplicar")
+  // Sincroniza o texto quando o value muda por fora (calendário, reset, prop).
+  useEffect(() => {
+    if (!focado) setTexto(formatarTexto(value, ehData))
+  }, [value, ehData, focado])
+
   const [mesVisivel, setMesVisivel] = useState(() => (parsed ? { y: parsed.y, m: parsed.m } : { y: hoje.getFullYear(), m: hoje.getMonth() }))
   const [rascunho, setRascunho] = useState(() => parsed)
 
@@ -62,9 +107,18 @@ export function DateTimePicker({ value, onChange, label, id, placeholder = 'dd/m
     return celulas
   }, [mesVisivel])
 
-  const rotulo = parsed
-    ? `${pad(parsed.day)}/${pad(parsed.m + 1)}/${parsed.y}, ${pad(parsed.h)}:${pad(parsed.min)}`
-    : ''
+  function digitar(bruto) {
+    const mascarado = mascarar(bruto, ehData)
+    setTexto(mascarado)
+    const v = parseTexto(mascarado, ehData)
+    if (v) onChange?.(v)
+    else if (mascarado === '') onChange?.('')
+  }
+  function aoSair() {
+    setFocado(false)
+    // texto incompleto/inválido volta ao último value válido
+    setTexto(formatarTexto(value, ehData))
+  }
 
   function mudarMes(delta) {
     setMesVisivel(({ y, m }) => {
@@ -73,7 +127,9 @@ export function DateTimePicker({ value, onChange, label, id, placeholder = 'dd/m
     })
   }
   function escolherDia(day) {
-    setRascunho((r) => ({ y: mesVisivel.y, m: mesVisivel.m, day, h: r?.h ?? 19, min: r?.min ?? 0 }))
+    const novo = { y: mesVisivel.y, m: mesVisivel.m, day, h: rascunho?.h ?? (ehData ? 0 : 19), min: rascunho?.min ?? 0 }
+    setRascunho(novo)
+    if (ehData) { onChange?.(toValue(novo, true)); setAberto(false) } // data: seleciona e fecha
   }
   function mudarHora(campo, v) {
     setRascunho((r) => ({
@@ -83,7 +139,7 @@ export function DateTimePicker({ value, onChange, label, id, placeholder = 'dd/m
   }
   function aplicar() {
     if (!rascunho?.day) return
-    onChange?.(toValue(rascunho))
+    onChange?.(toValue(rascunho, ehData))
     setAberto(false)
   }
 
@@ -92,14 +148,30 @@ export function DateTimePicker({ value, onChange, label, id, placeholder = 'dd/m
   return (
     <div className={`relative ${className}`} ref={raiz}>
       {label && <label htmlFor={campoId} className="mb-1.5 block text-sm font-medium text-text">{label}</label>}
-      <button
-        type="button" id={campoId} aria-haspopup="dialog" aria-expanded={aberto}
-        onClick={() => setAberto((v) => !v)}
-        className="flex h-12 w-full items-center justify-between gap-2 rounded-xl border border-border bg-background px-4 text-sm transition-colors hover:border-brand-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background cursor-pointer"
-      >
-        <span className={rotulo ? 'text-text' : 'text-text-muted'}>{rotulo || placeholder}</span>
-        <CalendarDays className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
-      </button>
+      <div className="relative">
+        <input
+          id={campoId}
+          value={texto}
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder={ph}
+          aria-label={label}
+          onFocus={() => setFocado(true)}
+          onBlur={aoSair}
+          onChange={(e) => digitar(e.target.value)}
+          className="h-12 w-full rounded-xl border border-border bg-background pl-4 pr-12 text-sm text-text placeholder:text-text-muted transition-colors hover:border-brand-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+        />
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={aberto}
+          aria-label="Abrir calendário"
+          onClick={() => setAberto((v) => !v)}
+          className="absolute right-1.5 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface hover:text-text cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <CalendarDays className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
       {/* input escondido para validação nativa de required */}
       {required && (
         <input tabIndex={-1} aria-hidden="true" className="sr-only" required value={value || ''} onChange={() => {}} />
@@ -159,28 +231,30 @@ export function DateTimePicker({ value, onChange, label, id, placeholder = 'dd/m
               })}
             </div>
 
-            {/* Hora */}
-            <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-              <Clock className="h-4 w-4 text-text-muted" aria-hidden="true" />
-              <span className="text-sm text-text-muted">Horário</span>
-              <div className="ml-auto flex items-center gap-1">
-                <TimeSpin value={rascunho?.h ?? 19} max={23} onChange={(v) => mudarHora('h', v)} aria-label="Hora" />
-                <span className="text-text-muted">:</span>
-                <TimeSpin value={rascunho?.min ?? 0} max={59} step={5} onChange={(v) => mudarHora('min', v)} aria-label="Minuto" />
-              </div>
-            </div>
-
-            {/* Ações */}
-            <div className="mt-4 flex items-center justify-end gap-2">
-              <button type="button" onClick={() => setAberto(false)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface hover:text-text cursor-pointer">
-                Cancelar
-              </button>
-              <button type="button" onClick={aplicar} disabled={!rascunho?.day}
-                className="brand-grad rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-on-brand shadow-sm disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer">
-                Aplicar
-              </button>
-            </div>
+            {/* Hora — só no modo datetime */}
+            {!ehData && (
+              <>
+                <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
+                  <Clock className="h-4 w-4 text-text-muted" aria-hidden="true" />
+                  <span className="text-sm text-text-muted">Horário</span>
+                  <div className="ml-auto flex items-center gap-1">
+                    <TimeSpin value={rascunho?.h ?? 19} max={23} onChange={(v) => mudarHora('h', v)} aria-label="Hora" />
+                    <span className="text-text-muted">:</span>
+                    <TimeSpin value={rascunho?.min ?? 0} max={59} step={5} onChange={(v) => mudarHora('min', v)} aria-label="Minuto" />
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button type="button" onClick={() => setAberto(false)}
+                    className="rounded-lg px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface hover:text-text cursor-pointer">
+                    Cancelar
+                  </button>
+                  <button type="button" onClick={aplicar} disabled={!rascunho?.day}
+                    className="brand-grad rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-on-brand shadow-sm disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer">
+                    Aplicar
+                  </button>
+                </div>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
