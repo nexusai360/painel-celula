@@ -38,9 +38,14 @@ export function TopBar() {
   const [drawerAberto, setDrawerAberto] = useState(false)
 
   const podeAdmin = ehAdmin(usuario?.papel)
-  const contexto = pathname.startsWith('/app/admin') ? 'admin' : 'membro'
+  // Perfil é neutro (acessado pelo menu do avatar) — não acende nenhum contexto.
+  const contexto = pathname.startsWith('/app/admin')
+    ? 'admin'
+    : pathname === '/app/perfil'
+      ? null
+      : 'membro'
   // No contexto admin o rail cuida da navegação; no membro, os links de participante.
-  const links = contexto === 'admin' ? [] : linksPorPapel(usuario)
+  const links = contexto === 'membro' ? linksPorPapel(usuario) : []
 
   function trocarContexto(id) {
     if (id === 'admin') navigate('/app/admin/usuarios')

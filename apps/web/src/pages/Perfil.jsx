@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { LogOut, CheckCircle2 } from 'lucide-react'
+import { LogOut, CheckCircle2, User } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiAtualizarPerfil } from '../lib/api.js'
 import { formatarWhatsapp } from '../lib/whatsapp.js'
@@ -12,6 +12,7 @@ import { ConjugeSecao } from '../components/ConjugeSecao.jsx'
 import { Input } from '../components/ui/Input.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Checkbox } from '../components/ui/Checkbox.jsx'
+import { RoleBadge } from '../components/ui/RoleBadge.jsx'
 import { Card } from '../components/ui/Card.jsx'
 
 export default function Perfil() {
@@ -76,133 +77,61 @@ export default function Perfil() {
 
   return (
     <div className="px-4 pt-6">
-      <div className="mx-auto max-w-md space-y-5">
+      <div className="mx-auto max-w-2xl space-y-5">
 
-        {/* Page title */}
-        <h1 className="font-display text-2xl font-bold text-text text-center">
-          Perfil
-        </h1>
-
-        {/* ── Profile form card ── */}
-        <Card className="space-y-0">
-          <form onSubmit={handleSubmit(onSubmit)} noValidate>
-
-            {/* Avatar upload — centred at the top of the card */}
-            <div className="flex justify-center pb-6 pt-2">
-              <AvatarUpload
-                value={avatarUrl}
-                nome={usuario?.nome}
-                onChange={setAvatarUrl}
-              />
+        {/* ── Header do perfil: avatar + identidade (não é formulário) ── */}
+        <div className="overflow-hidden rounded-[var(--radius-card)] border border-border bg-card">
+          <div className="chrome h-16 w-full" aria-hidden="true" />
+          <div className="flex flex-col items-center gap-3 px-6 pb-6 sm:flex-row sm:items-end sm:gap-5">
+            <div className="-mt-10 shrink-0">
+              <AvatarUpload value={avatarUrl} nome={usuario?.nome} onChange={setAvatarUrl} />
             </div>
-
-            <div className="space-y-4">
-              {/* Name */}
-              <Input
-                id="nome"
-                label="Nome"
-                autoComplete="name"
-                error={errors.nome?.message}
-                {...register('nome', { required: 'Nome é obrigatório' })}
-              />
-
-              {/* WhatsApp */}
-              <Input
-                id="whatsapp"
-                label="WhatsApp"
-                type="tel"
-                placeholder="(62) 99999-9999"
-                autoComplete="tel"
-                inputMode="tel"
-                error={errors.whatsapp?.message}
-                {...register('whatsapp')}
-              />
-
-              {/* Data de nascimento */}
-              <div className="w-full">
-                <Input
-                  id="dataNascimento"
-                  label="Data de nascimento"
-                  type="date"
-                  error={errors.dataNascimento?.message}
-                  {...register('dataNascimento')}
-                />
-                <p className="mt-1.5 text-xs text-text-muted">
-                  Assim a gente lembra de orar e comemorar com você no seu aniversário.
-                </p>
+            <div className="min-w-0 flex-1 text-center sm:pb-1 sm:text-left">
+              <h1 className="font-display text-xl font-bold text-text">{usuario?.nome}</h1>
+              <p className="truncate text-sm text-text-muted">{usuario?.email}</p>
+              <div className="mt-2 flex justify-center sm:justify-start">
+                <RoleBadge papel={usuario?.papel} />
               </div>
-
-              {/* Estado civil — checkbox discreto; ao marcar, revela o cônjuge */}
-              <div className="rounded-xl border border-border bg-surface/50 p-4">
-                <Checkbox
-                  id="casado"
-                  label="Sou casado(a)"
-                  descricao="Marque para vincular seu cônjuge por e-mail."
-                  checked={casado}
-                  onChange={setCasado}
-                />
-                {casado && (
-                  <div className="mt-4">
-                    <ConjugeSecao />
-                  </div>
-                )}
-              </div>
-
-              {/* Email — read-only */}
-              <div className="w-full">
-                <label
-                  htmlFor="email"
-                  className="mb-1.5 block text-sm font-medium text-text"
-                >
-                  E-mail
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={usuario?.email ?? ''}
-                  readOnly
-                  aria-readonly="true"
-                  className="h-12 w-full rounded-xl border border-border bg-surface px-4 text-sm text-text-muted cursor-default select-all focus:outline-none"
-                />
-                <p className="mt-1.5 text-xs text-text-muted">
-                  O e-mail não pode ser alterado aqui.
-                </p>
-              </div>
-
-              {/* Papel badge */}
-              <div className="flex items-center gap-2 py-1">
-                <span className="text-sm font-medium text-text">Perfil:</span>
-                <span className="inline-flex items-center rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand ring-1 ring-inset ring-brand/20">
-                  {papelLabel}
-                </span>
-              </div>
-
-              {/* General error */}
-              {erroGeral && (
-                <p role="alert" aria-live="assertive" className="text-sm text-danger">
-                  {erroGeral}
-                </p>
-              )}
-
-              {/* Success feedback */}
-              {sucesso && (
-                <div
-                  role="status"
-                  aria-live="polite"
-                  className="flex items-center gap-2 rounded-xl bg-success/10 px-4 py-3 text-sm font-semibold text-success"
-                >
-                  <CheckCircle2 className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                  Salvo!
-                </div>
-              )}
-
-              {/* Save */}
-              <Button type="submit" loading={isSubmitting}>
-                Salvar
-              </Button>
             </div>
-          </form>
-        </Card>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+          {/* ── Dados pessoais ── */}
+          <Card>
+            <div className="mb-4 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/10 text-brand"><User className="h-4 w-4" /></span>
+              <h2 className="font-semibold text-text">Dados pessoais</h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input id="nome" label="Nome" autoComplete="name" error={errors.nome?.message} {...register('nome', { required: 'Nome é obrigatório' })} />
+              <Input id="whatsapp" label="WhatsApp" type="tel" placeholder="(62) 99999-9999" autoComplete="tel" inputMode="tel" error={errors.whatsapp?.message} {...register('whatsapp')} />
+              <div>
+                <Input id="dataNascimento" label="Data de nascimento" type="date" error={errors.dataNascimento?.message} {...register('dataNascimento')} />
+                <p className="mt-1.5 text-xs text-text-muted">Pra lembrarmos de orar e comemorar com você.</p>
+              </div>
+              <div>
+                <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-text">E-mail</label>
+                <input id="email" type="email" value={usuario?.email ?? ''} readOnly aria-readonly="true" className="h-12 w-full rounded-xl border border-border bg-surface px-4 text-sm text-text-muted cursor-default select-all focus:outline-none" />
+                <p className="mt-1.5 text-xs text-text-muted">Não pode ser alterado aqui.</p>
+              </div>
+            </div>
+          </Card>
+
+          {/* ── Família ── */}
+          <Card>
+            <Checkbox id="casado" label="Sou casado(a)" descricao="Marque para vincular seu cônjuge por e-mail." checked={casado} onChange={setCasado} />
+            {casado && <div className="mt-4 border-t border-border pt-4"><ConjugeSecao /></div>}
+          </Card>
+
+          {erroGeral && <p role="alert" aria-live="assertive" className="text-sm text-danger">{erroGeral}</p>}
+          {sucesso && (
+            <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-xl bg-success/10 px-4 py-3 text-sm font-semibold text-success">
+              <CheckCircle2 className="h-4 w-4 flex-shrink-0" aria-hidden="true" /> Salvo!
+            </div>
+          )}
+          <Button type="submit" loading={isSubmitting} className="w-auto px-8">Salvar alterações</Button>
+        </form>
 
         {/* ── Logout — visually separated from the rest ── */}
         <div className="pt-2">
