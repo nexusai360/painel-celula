@@ -11,13 +11,13 @@
 ## Checklist de fases (marcar ao concluir)
 - [x] **Fase 0** — Fundação de UI (todos os primitivos + libs, 47 testes web verdes, build ok)
 - [x] **Fase 1** — RBAC/hierarquia (podeEditarPapel no shared, guard PUT, garantir-super-admin)
-- [ ] **Fase 2** — Diagnóstico "admin não vê usuários" (conta inativa → reativar) ← PRÓXIMA
-- [ ] **Fase 3** — Shell admin + Usuários + Aprovações (telas antes dos redirects)
-- [ ] **Fase 4** — Células (cep, refine TZ-safe, form multi-step, fix)
-- [ ] **Fase 5** — Perfil + /cadastro (estado civil checkbox)
-- [ ] **Fase 6** — Onboarding & CelulaPicker
-- [ ] **Fase 7** — QR (ramo com conta)
-- [ ] **Fase 8** — Polimento, migração de crus, design system MASTER
+- [x] **Fase 2** — Diagnóstico "admin não vê usuários" (era conta inativa; reativada no DB)
+- [x] **Fase 3** — Shell admin (AdminLayout rail) + Usuários reformada (abas/chips/RoleSelect/linha de dados/massa/skeleton/empty/erro/toast) + AdminAvisos + ContextSwitcher no TopBar + Aprovações do líder + redirects + banner só-exibe + largura por rota. Build+47 testes verdes.
+- [x] **Fase 4** — Células (cep+migration, coerção, refine TZ-safe verificado, form com CEP/cidade/sem-número/placeholders, fix criação)
+- [x] **Fase 5** — Perfil estado civil por checkbox (map-back seguro). FALTA 5.2 (/cadastro signup) — pendência menor
+- [x] **Fase 6** — Onboarding: CelulaPicker sofisticado (bonito sem foto/líder) + Aguardando com refresh de status
+- [ ] **Fase 7** — QR (ramo com conta) ← PRÓXIMA
+- [ ] **Fase 8** — Polimento, migração de crus (CronogramaForm etc.), design system MASTER, E2E + screenshots
 
 ## Log (task → commit)
 - 0.-1 infra teste React (jsdom+testing-library, coleta src/) → 63f1696
