@@ -1,51 +1,64 @@
-# iCélula — Design System (MASTER)
+# Painel de Célula — Design System (MASTER)
 
-Fonte de verdade visual. Tokens implementados em `apps/web/src/index.css` (CSS variables + Tailwind v4 `@theme inline`).
+> Destilado da UI reformada (jul/2026). Fonte de verdade visual. Tokens em
+> `apps/web/src/index.css` (CSS vars + Tailwind v4 `@theme inline`). Primitivos em
+> `apps/web/src/components/ui/`. Referência de sofisticação: Nexus Insights.
 
-## Marca
-- Primary Orange: `#E56A22` (`--brand`)
-- Hover Orange: `#C95518` (`--brand-hover`)
-- Soft Orange: `#F59A63` (`--brand-soft`)
-- On Brand (texto sobre laranja): `#FFFFFF`
+## Marca — prata cromada
+- `--brand` **#64748b** (light) / **#b9c1cd** (dark) — cinza-prata (slate). **Não** usar laranja/violeta.
+- Acabamento **cromado** (`.chrome` no index.css): gradiente metálico multi-stop + brilho especular
+  (`inset` highlight no topo + sombra na base). Usado com parcimônia: CTA primário, logo, segmento
+  ativo do ContextSwitcher, chip Super Admin. Hover desliza o sheen (respeita `prefers-reduced-motion`).
+- `--brand-grad` para superfícies de marca suaves (botão primário).
 
-## Light Mode
-| Token | Hex |
-|---|---|
-| `--background` | #FFFFFF |
-| `--surface` | #F8F8F8 |
-| `--card` | #FFFFFF |
-| `--border` | #ECECEC |
-| `--text` | #1A1A1A |
-| `--text-muted` | #666666 |
+## Tema
+| Token | Light | Dark |
+|---|---|---|
+| `--background` | #ffffff | #141417 |
+| `--surface` | #f8f8f8 | #1c1c21 |
+| `--card` | #ffffff | #212127 |
+| `--border` | #ececec | #2f2f38 |
+| `--text` | #1a1a1a | #ffffff |
+| `--text-muted` | #666666 | #b4b4be |
 
-## Dark Mode (Deep Graphite Purple)
-| Token | Hex |
-|---|---|
-| `--background` | #1B1824 |
-| `--surface` | #242031 |
-| `--card` | #2D2838 |
-| `--border` | #3A3448 |
-| `--text` | #FFFFFF |
-| `--text-muted` | #B9B3C9 |
+Dark por classe `.dark` no `<html>` (ThemeContext; persiste; respeita `prefers-color-scheme`).
+Fontes: **Sora** (`font-display`, títulos) + **Inter** (corpo). Base 16px, line-height 1.5.
 
-Accent laranja em ambos os temas. Alternância por classe `.dark` no `<html>` (ThemeContext, persiste em localStorage, respeita `prefers-color-scheme`).
+## Paleta semântica de PAPÉIS e STATUS (`lib/papeis.js`)
+Chip = `bg-{cor}-500/10 border border-{cor}-500/30 text-{cor}-700 dark:text-{cor}-400` + ícone + texto.
+`-700` no light garante contraste AA (amber/emerald/red no `-600` reprovam).
+| Papel | cor / ícone | Status | cor / ícone |
+|---|---|---|---|
+| Membro | zinc / Eye | Em aprovação | amber / Clock |
+| Líder | amber / Shield | Ativo | emerald / UserCheck |
+| Administrador | blue / ShieldCheck | Inativo | red / UserX |
+| Super Admin | **chrome** / Crown | | |
 
-## Tipografia
-- Títulos: **Sora** (`--font-display`)
-- Corpo: **Inter** (`--font-sans`)
-- Base 16px, line-height 1.5.
+## Primitivos (`components/ui/`)
+- **Layout/estados:** `Card` (ring-1, rounded-16), `Skeleton`/`SkeletonLinhas`, `EmptyState`, `ErrorState` (retry), `Toast` (provider global, aria-live, auto-dismiss 4s).
+- **Navegação:** `Tabs` (pill, teclado ←→/Home/End), `ContextSwitcher` (segmented, ativo cromado, colapsa `<sm`).
+- **Overlays:** `Modal` + `Sheet` (compartilham `hooks/useOverlayDismiss` — lock/trap/Esc/restore), `Popover` (outside-click/Esc). Scrim `bg-black/60 backdrop-blur-sm`.
+- **Entrada:** `Input`, `Select`, `Combobox` (busca + allowCustom), `Checkbox`, `RoleSelect` (chip-trigger ≥44px, Popover), `DateTimePicker`.
+- **Badges:** `RoleBadge`, `StatusBadge`. **Avatar** + `lib/avatarCor` (cor determinística por nome para quem não tem foto).
+- **Máscaras:** `lib/mascaras` (CEP/telefone). **Cidades:** `lib/cidades` (curada + digitável).
 
-## Componentes
-- Cards arredondados 16px (`--radius-card`), sombra suave.
-- Botões: altura 48px, raio 12px, variantes `primary` / `secondary` / `ghost`, micro-scale no active, foco visível (ring laranja).
-- Inputs: 48px, foco com ring, toggle de mostrar/ocultar senha, erro abaixo do campo (role="alert").
-- Ícones: **lucide-react** (stroke consistente), nunca emoji estrutural.
-- Estados: skeleton loading (landing), empty/"Em breve" tags, transições 150–300ms.
+## Assinaturas de layout
+- **Header de página:** ícone-em-caixinha `h-10 w-10 rounded-xl bg-brand/10 text-brand` + título `font-display text-2xl font-bold` + subtítulo `text-sm text-text-muted`.
+- **Largura por área** (`AppLayout` decide pela rota): Administração `max-w-6xl` (listas densas); participante/forms `max-w-3xl`.
+- **Lista densa (admin):** linhas com `divide-y`, `hover:bg-surface/50`, altura confortável; empilha em card no mobile (nunca scroll horizontal).
+- **Sub-nav admin:** rail lateral em `lg+`, barra rolável em `<lg`.
 
-## Princípios (estilo "Accessible & Ethical")
-- Contraste AA (4.5:1), focus rings visíveis, navegação por teclado, `prefers-reduced-motion` respeitado.
-- Mobile-first; breakpoints 375 / 768 / 1024 / 1440.
-- Cor nunca é o único indicador de estado.
+## Interação & a11y
+- Foco único: classe `.foco` ou `focus-visible:ring-2 ring-brand ring-offset-2 ring-offset-background`.
+- Toque ≥44px; `cursor-pointer` em clicáveis; micro-interações 150–300ms; `prefers-reduced-motion` desliga animações (bloco global no index.css).
+- Contraste AA (light e dark testados). Cor nunca é o único indicador (chip = cor+ícone+texto).
+- Ações destrutivas (Recusar/Excluir/Desativar) em `--danger`, com confirmação (`ConfirmDialog`).
+- `framer-motion` para entrada (fade+y) e overlays; `role`/`aria` corretos em Tabs/Combobox/RoleSelect/Modal/Popover.
 
-## Estética
-SaaS moderno, acolhedor e caloroso — inspirado no app "Sara". Brilho sutil da marca no topo das telas de auth.
+## Formulários (fugir do "Google Forms")
+Seções com título; labels visíveis + placeholder de exemplo; máscara (CEP/telefone); helper text;
+um CTA primário por tela; `Checkbox` para revelar seções (progressive disclosure); `Toast` de sucesso.
+
+## Anti-padrões (proibido)
+Emoji como ícone; hex cru em componente; placeholder como único label; scroll horizontal no mobile;
+remover focus ring; chip sem ícone/texto; formulão sem seções; trocar a marca prata; trocar Inter/Sora.
