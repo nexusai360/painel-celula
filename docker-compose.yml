@@ -40,6 +40,10 @@ services:
       API_PORT: "3000"
       HOST: "0.0.0.0"
       TZ: "America/Sao_Paulo"
+      # Admin dono, recriado (upsert) no boot. Valores vêm do .env (gitignored).
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-}"
+      ADMIN_SENHA: "${ADMIN_SENHA:-}"
+      ADMIN_NOME: "${ADMIN_NOME:-Administrador}"
     ports:
       - "3200:3000"
 
