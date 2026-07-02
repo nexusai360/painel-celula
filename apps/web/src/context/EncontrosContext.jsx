@@ -7,7 +7,8 @@ export const useEncontros = () => useContext(Ctx)
 
 export function EncontrosProvider({ children }) {
   const { usuario } = useAuth()
-  const celulaId = usuario?.celulaId ?? null
+  // Contexto de encontros: célula onde é membro OU, se só lidera/criou, a principal.
+  const celulaId = usuario?.celulaId ?? usuario?.minhasCelulas?.[0]?.id ?? null
   const [encontros, setEncontros] = useState(null)
   const [erro, setErro] = useState('')
 
