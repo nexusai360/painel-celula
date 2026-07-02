@@ -38,10 +38,14 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- 4) backfill dos líderes atuais
-INSERT INTO "_LideresDaCelula" ("A", "B")
-SELECT "id", "liderId" FROM "Celula" WHERE "liderId" IS NOT NULL
-ON CONFLICT DO NOTHING;
+-- 4) backfill dos líderes atuais (só se a coluna liderId ainda existir — torna re-executável)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Celula' AND column_name = 'liderId') THEN
+    INSERT INTO "_LideresDaCelula" ("A", "B")
+    SELECT "id", "liderId" FROM "Celula" WHERE "liderId" IS NOT NULL
+    ON CONFLICT DO NOTHING;
+  END IF;
+END $$;
 
 -- 5) remove a coluna liderId (dropa unique/FK dependentes junto)
 ALTER TABLE "Celula" DROP COLUMN IF EXISTS "liderId";
