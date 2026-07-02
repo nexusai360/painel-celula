@@ -20,7 +20,7 @@ import {
   apiListarUsuarios
 } from '../lib/api.js'
 import { nomeDiaSemana } from '../lib/datas.js'
-import { montarPayloadCelula } from '../lib/celulaPayload.js'
+import { montarPayloadCelula, weekdayDaData } from '../lib/celulaPayload.js'
 import { mascaraCep } from '../lib/mascaras.js'
 import { CIDADES } from '../lib/cidades.js'
 
@@ -44,6 +44,34 @@ function NovaCelula({ onCriada }) {
   const [erro, setErro] = useState('')
   const toast = useToast()
   const set = (c, v) => setForm((f) => ({ ...f, [c]: v }))
+
+  // O dia da semana é DERIVADO da data (nunca deixa o usuário criar mismatch).
+  function setData(v) {
+    setForm((f) => ({ ...f, dataPrimeiroEncontro: v, diaSemana: weekdayDaData(v) ?? f.diaSemana }))
+  }
+
+  // CEP com autofill (ViaCEP, best-effort, com timeout).
+  async function buscarCep(cepMascarado) {
+    setForm((f) => ({ ...f, cep: cepMascarado }))
+    const d = cepMascarado.replace(/\D/g, '')
+    if (d.length !== 8) return
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 4000)
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${d}/json/`, { signal: ctrl.signal })
+      const j = await r.json()
+      if (!j.erro) {
+        setForm((f) => ({
+          ...f,
+          cidade: j.localidade || f.cidade,
+          bairro: j.bairro || f.bairro,
+          endereco: j.logradouro || f.endereco,
+        }))
+      }
+    } catch { /* best-effort — mantém o que o usuário digitou */ } finally {
+      clearTimeout(timer)
+    }
+  }
 
   async function criar(e) {
     e.preventDefault()
@@ -86,24 +114,28 @@ function NovaCelula({ onCriada }) {
         {/* Encontro */}
         <div className="space-y-4 border-t border-border pt-5">
           <p className="text-sm font-semibold text-text">Encontro</p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Dia da semana" options={OPCOES_DIA} value={form.diaSemana} onChange={(v) => set('diaSemana', v)} />
-            <Select label="Frequência" options={OPCOES_FREQ} value={form.frequenciaDias} onChange={(v) => set('frequenciaDias', v)} />
-          </div>
           <DateTimePicker
             label="Data e horário do primeiro encontro"
             value={form.dataPrimeiroEncontro}
-            onChange={(v) => set('dataPrimeiroEncontro', v)}
+            onChange={setData}
             required
           />
-          <p className="text-xs text-text-muted">O dia da semana precisa combinar com a data escolhida.</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-text">Dia da semana</label>
+              <div className="flex h-12 items-center rounded-xl border border-border bg-surface px-4 text-sm text-text-muted">
+                {form.dataPrimeiroEncontro ? nomeDiaSemana(form.diaSemana) : 'Definido pela data acima'}
+              </div>
+            </div>
+            <Select label="Frequência" options={OPCOES_FREQ} value={form.frequenciaDias} onChange={(v) => set('frequenciaDias', v)} />
+          </div>
         </div>
 
         {/* Endereço */}
         <div className="space-y-4 border-t border-border pt-5">
           <p className="text-sm font-semibold text-text">Endereço da célula</p>
           <div className="grid gap-4 sm:grid-cols-3">
-            <Input id="cep" label="CEP" placeholder="00000-000" inputMode="numeric" value={form.cep} onChange={(e) => set('cep', mascaraCep(e.target.value))} />
+            <Input id="cep" label="CEP" placeholder="00000-000" inputMode="numeric" value={form.cep} onChange={(e) => buscarCep(mascaraCep(e.target.value))} />
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-sm font-medium text-text">Cidade</label>
               <Combobox value={form.cidade} onChange={(v) => set('cidade', v)} options={CIDADES} placeholder="Comece a digitar…" allowCustom aria-label="Cidade" />

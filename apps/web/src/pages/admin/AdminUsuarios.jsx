@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ShieldCheck, HelpCircle, Check, X, Users, UserPlus, Search } from 'lucide-react'
+import { ShieldCheck, HelpCircle, Check, X, Users, UserPlus, Search, Power } from 'lucide-react'
 import { Avatar } from '../../components/ui/Avatar.jsx'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Tabs.jsx'
 import { RoleSelect } from '../../components/ui/RoleSelect.jsx'
@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog.jsx'
 import { useToast } from '../../components/ui/Toast.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import {
-  CORES_PAPEL, opcoesDePapel, podeAgirSobre, statusDeUsuario, ROTULO_PAPEL,
+  CORES_PAPEL, CORES_STATUS, opcoesDePapel, podeAgirSobre, statusDeUsuario, ROTULO_PAPEL,
 } from '../../lib/papeis.js'
 import {
   apiUsuariosPendentes, apiAprovarUsuario, apiRecusarUsuario,
@@ -268,7 +268,6 @@ function AbaTodos({ eu }) {
                   </p>
                   <p className="truncate text-sm text-text-muted">{u.email}</p>
                 </div>
-                <StatusBadge status={statusDeUsuario(u)} />
                 <div className="shrink-0">
                   <RoleSelect
                     value={u.papel}
@@ -277,20 +276,23 @@ function AbaTodos({ eu }) {
                     onChange={(p) => trocarPapel(u, p)}
                   />
                 </div>
+                {/* Status É o controle: um único chip que liga/desliga o usuário */}
                 {podeAgir ? (
                   <button
+                    type="button"
                     onClick={() => alternarAtivo(u)}
                     disabled={ocupado === u.id}
-                    className={`shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-40 cursor-pointer ${
-                      u.ativo
-                        ? 'border-border text-text-muted hover:border-danger hover:text-danger'
-                        : 'border-success/40 text-success hover:bg-success/10'
-                    }`}
+                    title={u.ativo ? 'Ativo — clique para desativar' : 'Inativo — clique para ativar'}
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all hover:opacity-80 disabled:opacity-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${CORES_STATUS[statusDeUsuario(u)].chip}`}
                   >
-                    {u.ativo ? 'Desativar' : 'Ativar'}
+                    {(() => {
+                      const c = CORES_STATUS[statusDeUsuario(u)]
+                      const Ic = c.icon
+                      return <><Ic className="h-3.5 w-3.5" aria-hidden="true" />{c.label}<Power className="ml-0.5 h-3 w-3 opacity-60" aria-hidden="true" /></>
+                    })()}
                   </button>
                 ) : (
-                  <span className="w-[76px] shrink-0" aria-hidden="true" />
+                  <StatusBadge status={statusDeUsuario(u)} />
                 )}
               </div>
             )

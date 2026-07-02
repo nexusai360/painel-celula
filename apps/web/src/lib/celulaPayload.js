@@ -5,6 +5,15 @@
  *   para o backend interpretar o weekday de forma TZ-independente e não deslocar o dia).
  * - "Sem número" grava 'S/N'.
  */
+/** Dia da semana (0=dom..6=sáb) derivado do wall-clock "YYYY-MM-DDTHH:mm", em UTC
+ *  (mesma interpretação do backend — nunca desloca por fuso). Vazio → null. */
+export function weekdayDaData(s) {
+  if (!s || s.length < 10) return null
+  const [y, mo, d] = s.slice(0, 10).split('-').map(Number)
+  if (!y || !mo || !d) return null
+  return new Date(Date.UTC(y, mo - 1, d)).getUTCDay()
+}
+
 export function montarPayloadCelula(form) {
   const numero = form.semNumero ? 'S/N' : form.numero || undefined
   return {
