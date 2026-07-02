@@ -78,6 +78,30 @@
   filter: brightness(1.04);
 }
 
+/* Acabamento cromado/metálico prata — usar com parcimônia (CTA, logo, aba ativa, chip super) */
+.chrome {
+  background-image: linear-gradient(180deg, #8b95a5 0%, #6b7280 45%, #515e70 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 2px rgba(0, 0, 0, 0.18);
+  color: var(--on-brand);
+}
+.dark .chrome {
+  background-image: linear-gradient(180deg, #e6ebf1 0%, #c3ccd7 50%, #aab4c2 100%);
+}
+/* Brilho especular desliza sutilmente no hover (desligado em reduced-motion pelo bloco base) */
+.chrome:hover:not(:disabled) {
+  background-position: 0 -1px;
+  filter: brightness(1.03);
+}
+
+/* Token único de foco visível — aplicar em tudo interativo */
+.foco {
+  outline: none;
+}
+.foco:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--brand);
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
