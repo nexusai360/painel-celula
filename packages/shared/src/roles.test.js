@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   podeEditarPapel, opcoesDePapel, podeAgirSobre, temNivel, ehGestor, ehLider, PAPEL_RANK,
+  NIVEL_RANK, TODOS_NIVEIS, temNivelAcesso, podeEditarNivel, opcoesDeNivel, podeAgirSobreNivel,
+  ehAdmin, ehSuperAdmin,
 } from './roles.js'
 
 describe('podeEditarPapel', () => {
@@ -55,5 +57,39 @@ describe('helpers', () => {
     expect(ehLider('ADMIN')).toBe(false)
     expect(temNivel('ADMIN', 'LIDER')).toBe(true)
     expect(PAPEL_RANK.SUPER_ADMIN).toBe(4)
+  })
+})
+
+// ── Eixo NÍVEL DE ACESSO (novo) ─────────────────────────────────────────────
+describe('nível de acesso', () => {
+  it('rank e ordem', () => {
+    expect(TODOS_NIVEIS).toEqual(['USUARIO', 'ADMIN', 'SUPER_ADMIN'])
+    expect(NIVEL_RANK.USUARIO).toBe(1)
+    expect(NIVEL_RANK.SUPER_ADMIN).toBe(3)
+    expect(temNivelAcesso('ADMIN', 'ADMIN')).toBe(true)
+    expect(temNivelAcesso('USUARIO', 'ADMIN')).toBe(false)
+  })
+  it('ehAdmin/ehSuperAdmin servem ao espaço de nível', () => {
+    expect(ehAdmin('ADMIN')).toBe(true)
+    expect(ehAdmin('SUPER_ADMIN')).toBe(true)
+    expect(ehAdmin('USUARIO')).toBe(false)
+    expect(ehSuperAdmin('SUPER_ADMIN')).toBe(true)
+    expect(ehSuperAdmin('ADMIN')).toBe(false)
+  })
+  it('podeEditarNivel: admin nomeia admin, não mexe em admin/super; super faz tudo', () => {
+    expect(podeEditarNivel('ADMIN', 'USUARIO', 'ADMIN')).toBe(true)
+    expect(podeEditarNivel('ADMIN', 'ADMIN', 'USUARIO')).toBe(false)
+    expect(podeEditarNivel('ADMIN', 'USUARIO', 'SUPER_ADMIN')).toBe(false)
+    expect(podeEditarNivel('SUPER_ADMIN', 'ADMIN', 'USUARIO')).toBe(true)
+    expect(podeEditarNivel('SUPER_ADMIN', 'USUARIO', 'SUPER_ADMIN')).toBe(true)
+    expect(podeEditarNivel('USUARIO', 'USUARIO', 'ADMIN')).toBe(false)
+  })
+  it('opcoesDeNivel e podeAgirSobreNivel', () => {
+    expect(opcoesDeNivel('ADMIN', 'USUARIO')).toEqual(['USUARIO', 'ADMIN'])
+    expect(opcoesDeNivel('SUPER_ADMIN', 'USUARIO')).toEqual(['USUARIO', 'ADMIN', 'SUPER_ADMIN'])
+    expect(opcoesDeNivel('ADMIN', 'ADMIN')).toEqual(['ADMIN'])
+    expect(podeAgirSobreNivel('ADMIN', { nivelAcesso: 'ADMIN' })).toBe(false)
+    expect(podeAgirSobreNivel('ADMIN', { nivelAcesso: 'USUARIO' })).toBe(true)
+    expect(podeAgirSobreNivel('SUPER_ADMIN', { nivelAcesso: 'ADMIN' })).toBe(true)
   })
 })
