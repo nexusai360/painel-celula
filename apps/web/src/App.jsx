@@ -26,7 +26,10 @@ import NotFound from './pages/NotFound.jsx'
 
 function InicioOuCelulas() {
   const { usuario } = useAuth()
-  return ehAdmin(usuario?.papel) ? <Navigate to="/app/celulas" replace /> : <AppHome />
+  // Admin sem célula vai direto para a Administração; admin que participa de uma
+  // célula (ou membro/líder) vê a home de participante.
+  if (ehAdmin(usuario?.papel) && !usuario?.celulaId) return <Navigate to="/app/celulas" replace />
+  return <AppHome />
 }
 
 function SoLider({ children }) {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { NavLink, Link } from 'react-router-dom'
 import { CalendarDays, Home, Users2, HandHeart, Sparkles, Heart, Menu, UserCheck } from 'lucide-react'
 import { Logo } from './ui/Logo.jsx'
@@ -13,10 +13,20 @@ export function linksPorPapel(usuario) {
   const { papel, celulaId } = usuario || {}
   // Usuário pendente (não aprovado) não vê navegação — só perfil/aguardando.
   if (usuario?.aprovado === false) return []
-  if (ehAdmin(papel)) return [
-    { to: '/app/celulas', label: 'Células', icon: Users2 },
-    { to: '/app/usuarios', label: 'Usuários', icon: UserCheck }
-  ]
+  if (ehAdmin(papel)) {
+    // Área de Administração.
+    const admin = [
+      { to: '/app/celulas', label: 'Células', icon: Users2, grupo: 'Administração' },
+      { to: '/app/usuarios', label: 'Usuários', icon: UserCheck, grupo: 'Administração' }
+    ]
+    // Admin que também participa de uma célula vê a própria área de participante.
+    if (celulaId) {
+      admin.push({ to: '/app', label: 'Início', icon: Home, end: true, grupo: 'Minha célula', divisor: true })
+      admin.push({ to: '/app/calendario', label: 'Calendário', icon: CalendarDays, grupo: 'Minha célula' })
+      admin.push({ to: '/app/pedidos', label: 'Pedidos', icon: HandHeart, grupo: 'Minha célula' })
+    }
+    return admin
+  }
   if (!celulaId) return []
   const links = [
     { to: '/app', label: 'Início', icon: Home, end: true },
@@ -58,18 +68,21 @@ export function TopBar() {
         <div className="flex items-center gap-1">
           {links.length > 0 && (
             <nav className="mr-2 hidden items-center gap-1 md:flex" aria-label="Navegação principal">
-              {links.map(({ to, label, icon: Icon, end }) => (
-                <NavLink
-                  key={to} to={to} end={end}
-                  className={({ isActive }) =>
-                    `inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                      isActive ? 'bg-brand text-on-brand' : 'text-text-muted hover:bg-surface hover:text-text'
-                    }`
-                  }
-                >
-                  <Icon className="h-4 w-4" aria-hidden="true" />
-                  {label}
-                </NavLink>
+              {links.map(({ to, label, icon: Icon, end, divisor }) => (
+                <Fragment key={to}>
+                  {divisor && <span className="mx-1.5 h-5 w-px bg-border" aria-hidden="true" />}
+                  <NavLink
+                    to={to} end={end}
+                    className={({ isActive }) =>
+                      `inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                        isActive ? 'bg-brand text-on-brand' : 'text-text-muted hover:bg-surface hover:text-text'
+                      }`
+                    }
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {label}
+                  </NavLink>
+                </Fragment>
               ))}
             </nav>
           )}

@@ -128,7 +128,9 @@ ADMIN/SUPER_ADMIN. ADMIN pode gerenciar MEMBRO↔LIDER e (des)ativar contas.
   (escopo GLOBAL|CELULA) + leitura via User.notificacoesLidasEm; rotas GET /notificacoes
   (lista+naoLidas+podeEnviar), POST /notificacoes/ler, POST /notificacoes (ADMIN global;
   LÍDER só da própria célula). Sino no header (badge, painel, compor pra quem pode enviar).
-- [ ] Fase 7 — Separação de áreas.
+- [x] Fase 7 — Separação de áreas: nav agrupada (Administração | Minha célula) com
+  divisor; admin que participa de uma célula também vê a home/área de participante
+  (InicioOuCelulas: admin SEM célula vai p/ Administração; COM célula vê AppHome).
 
 > Observação do dono: virão mais requisitos em áudios futuros — manter o plano
 > extensível.
