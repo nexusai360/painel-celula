@@ -1,13 +1,18 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { ChevronDown, Check, Search } from 'lucide-react'
+import { ChevronDown, Check, Search, Loader2 } from 'lucide-react'
 
 function normalizar(s) {
   return String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
+// Teto de itens renderizados por vez — listas gigantes (ex.: 5.5k municípios do
+// IBGE) montariam milhares de nós e travariam o dropdown. Digitar refina.
+const MAX_VISIVEIS = 80
+
 /**
  * Combobox com busca. options: [{value,label,description?}] ou string[].
  * allowCustom: commita o texto digitado como valor (ex.: cidade fora da lista).
+ * loading: mostra estado de carregamento (ex.: baixando a lista de cidades).
  */
 export function Combobox({
   value,
@@ -15,6 +20,7 @@ export function Combobox({
   options = [],
   placeholder = 'Selecione',
   allowCustom = false,
+  loading = false,
   className = '',
   'aria-label': ariaLabel,
 }) {
@@ -29,11 +35,13 @@ export function Combobox({
   const rootRef = useRef(null)
   const listId = useId()
 
-  const filtradas = useMemo(() => {
+  const filtradasTodas = useMemo(() => {
     const q = normalizar(query)
     if (!q) return opts
     return opts.filter((o) => normalizar(o.label).includes(q))
   }, [opts, query])
+  const filtradas = useMemo(() => filtradasTodas.slice(0, MAX_VISIVEIS), [filtradasTodas])
+  const ocultas = filtradasTodas.length - filtradas.length
 
   useEffect(() => {
     if (!aberto) return
@@ -98,7 +106,11 @@ export function Combobox({
           onKeyDown={onKeyDown}
           className="h-11 w-full rounded-xl border border-border bg-card pl-9 pr-9 text-sm text-text placeholder:text-text-muted transition-colors focus:border-brand-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         />
-        <ChevronDown className={`pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted transition-transform ${aberto ? 'rotate-180' : ''}`} aria-hidden="true" />
+        {loading ? (
+          <Loader2 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-text-muted" aria-hidden="true" />
+        ) : (
+          <ChevronDown className={`pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted transition-transform ${aberto ? 'rotate-180' : ''}`} aria-hidden="true" />
+        )}
       </div>
       {aberto && (
         <ul
@@ -106,7 +118,12 @@ export function Combobox({
           role="listbox"
           className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-border bg-card p-1 shadow-lg"
         >
-          {filtradas.length === 0 && (
+          {loading && filtradas.length === 0 && (
+            <li className="flex items-center gap-2 px-3 py-2 text-sm text-text-muted">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Carregando cidades…
+            </li>
+          )}
+          {!loading && filtradas.length === 0 && (
             <li className="px-3 py-2 text-sm text-text-muted">
               {allowCustom && query ? `Usar “${query}”` : 'Nada encontrado'}
             </li>
@@ -131,6 +148,11 @@ export function Combobox({
               </button>
             </li>
           ))}
+          {ocultas > 0 && (
+            <li className="px-3 py-2 text-center text-xs text-text-muted">
+              +{ocultas} cidade(s) — digite para refinar
+            </li>
+          )}
         </ul>
       )}
     </div>

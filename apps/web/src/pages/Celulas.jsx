@@ -24,7 +24,21 @@ import {
 import { nomeDiaSemana } from '../lib/datas.js'
 import { montarPayloadCelula, weekdayDaData } from '../lib/celulaPayload.js'
 import { mascaraCep } from '../lib/mascaras.js'
-import { CIDADES } from '../lib/cidades.js'
+import { carregarCidadesBrasil, CIDADES_OPCOES_FALLBACK } from '../lib/cidades.js'
+
+// Carrega as cidades do Brasil (IBGE, com cache/fallback) de forma lazy.
+function useCidadesBrasil() {
+  const [opcoes, setOpcoes] = useState(CIDADES_OPCOES_FALLBACK)
+  const [carregando, setCarregando] = useState(true)
+  useEffect(() => {
+    let vivo = true
+    carregarCidadesBrasil()
+      .then((o) => { if (vivo) setOpcoes(o) })
+      .finally(() => { if (vivo) setCarregando(false) })
+    return () => { vivo = false }
+  }, [])
+  return { opcoes, carregando }
+}
 
 const DIAS = [0, 1, 2, 3, 4, 5, 6]
 const FREQUENCIAS = [
@@ -45,6 +59,7 @@ function NovaCelula({ onCriada }) {
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
   const toast = useToast()
+  const { opcoes: cidades, carregando: carregandoCidades } = useCidadesBrasil()
   const set = (c, v) => setForm((f) => ({ ...f, [c]: v }))
 
   // O dia da semana é DERIVADO da data (nunca deixa o usuário criar mismatch).
@@ -83,7 +98,8 @@ function NovaCelula({ onCriada }) {
       await apiCriarCelula(montarPayloadCelula(form))
       setForm({
         nome: '', descricao: '', diaSemana: 4, frequenciaDias: 7, dataPrimeiroEncontro: '',
-        cidade: '', bairro: '', endereco: '', numero: '', complemento: '', pontoReferencia: ''
+        cidade: '', bairro: '', endereco: '', numero: '', complemento: '', pontoReferencia: '',
+        cep: '', semNumero: false
       })
       onCriada()
       toast.sucesso('Célula criada.')
@@ -131,7 +147,7 @@ function NovaCelula({ onCriada }) {
             <Input id="cep" label="CEP" placeholder="00000-000" inputMode="numeric" value={form.cep} onChange={(e) => buscarCep(mascaraCep(e.target.value))} />
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-sm font-medium text-text">Cidade</label>
-              <Combobox value={form.cidade} onChange={(v) => set('cidade', v)} options={CIDADES} placeholder="Comece a digitar…" allowCustom aria-label="Cidade" />
+              <Combobox value={form.cidade} onChange={(v) => set('cidade', v)} options={cidades} loading={carregandoCidades} placeholder="Comece a digitar…" allowCustom aria-label="Cidade" />
             </div>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
