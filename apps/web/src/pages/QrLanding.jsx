@@ -6,20 +6,31 @@ import { Button } from '../components/ui/Button.jsx'
 import { Card } from '../components/ui/Card.jsx'
 import { apiCelulaPublica, apiCheckinQr } from '../lib/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useToast } from '../components/ui/Toast.jsx'
 import { BotaoGoogle } from '../components/BotaoGoogle.jsx'
 
 export default function QrLanding() {
   const { qrToken } = useParams()
   const navigate = useNavigate()
   const { usuario } = useAuth()
+  const toast = useToast()
   const [celula, setCelula] = useState(null)
   const [estado, setEstado] = useState('carregando') // carregando | ok | erro
 
   useEffect(() => {
     if (!usuario) return
-    // Já logado: tenta marcar presença por este QR (best-effort) e segue.
-    apiCheckinQr(qrToken).catch(() => {}).finally(() => navigate('/app', { replace: true }))
-  }, [usuario, qrToken, navigate])
+    // Já logado (ramo "com conta"): marca presença e mostra o resultado antes de seguir.
+    apiCheckinQr(qrToken)
+      .then((r) => {
+        if (r?.presenca) toast.sucesso('Presença registrada!')
+        else if (r?.motivo) toast.info(r.motivo)
+      })
+      .catch((e) => {
+        const msg = e?.response?.data?.erro
+        if (msg) toast.info(msg)
+      })
+      .finally(() => navigate('/app', { replace: true }))
+  }, [usuario, qrToken, navigate, toast])
 
   useEffect(() => {
     let ativo = true
