@@ -21,3 +21,10 @@
 - 6b: notificações in-app (sino + envio ADMIN global / LÍDER da célula).
 - 7: separação de áreas (nav agrupada; admin com célula vê área de participante).
 - Plataforma v2 completa (fases 0–7) LIVE e CI-verde.
+
+## 2026-07-02 — Refactor Nível×Qualificação + Liderança N:N + Segmentação (3 fases) → DEPLOY em prod
+- Desacoplado `papel` em dois eixos: `NivelAcesso {USUARIO,ADMIN,SUPER_ADMIN}` × `Qualificacao {CONVIDADO..PASTOR}`; coluna/enum `papel` dropados.
+- Liderança N:N (junção `lideres`); criação de célula por líder/pastor com aprovação de admin; travas de rebaixamento.
+- Segmentação de avisos por 3 eixos AND (células/qualificações/níveis + flags Todas, dedup, SUPER casa ADMIN); banner CRUD com expiração + carrossel; notificação leitura por item (`NotificacaoLeitura`) + marcar-tudo + modal; `SeletorPublico`.
+- Spec v3→R1→v4→R2→v5 (2 reviews adversariais). ~70 commits atômicos. 17 migrações validadas em DB fresco. Validado E2E local + prod.
+- **Deploy live: https://celula.nexusai360.com** (commit 228a394). Pendente: reescrever testes de ROTA da API p/ CI verde (dívida de teste; não bloqueia deploy — build.yml independente do ci.yml). Ver HANDOFF-2026-07-02-refactor-nivel-qualificacao-lideranca-segmentacao.md.
