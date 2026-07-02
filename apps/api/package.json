@@ -12,7 +12,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:seed": "node prisma/seed.js",
-    "admin": "node prisma/criar-admin.js"
+    "admin": "node prisma/criar-admin.js",
+    "admin:super": "node prisma/garantir-super-admin.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

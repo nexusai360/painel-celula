@@ -11,6 +11,10 @@ set -e
 echo "[entrypoint] Aplicando migrations (prisma migrate deploy)..."
 npm run prisma:deploy --workspace apps/api
 
+# Garante o dono (SUPER_ADMIN) de forma idempotente — default nexusai360@gmail.com.
+echo "[entrypoint] Garantindo super admin (${SUPER_ADMIN_EMAIL:-nexusai360@gmail.com})..."
+npm run admin:super --workspace apps/api || true
+
 if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_SENHA" ]; then
   echo "[entrypoint] Garantindo admin ${ADMIN_EMAIL} (idempotente)..."
   npm run admin --workspace apps/api

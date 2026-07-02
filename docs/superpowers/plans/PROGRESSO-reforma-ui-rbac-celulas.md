@@ -9,9 +9,9 @@
 - **Implementação:** INICIANDO Fase 0.
 
 ## Checklist de fases (marcar ao concluir)
-- [ ] **Fase 0** — Fundação de UI (0.-1 infra teste → 0.0 css → 0.1..0.15 primitivos)
-- [ ] **Fase 1** — RBAC/hierarquia (podeEditarPapel no shared, guard PUT, garantir-super-admin)
-- [ ] **Fase 2** — Diagnóstico "admin não vê usuários" (conta inativa → reativar)
+- [x] **Fase 0** — Fundação de UI (todos os primitivos + libs, 47 testes web verdes, build ok)
+- [x] **Fase 1** — RBAC/hierarquia (podeEditarPapel no shared, guard PUT, garantir-super-admin)
+- [ ] **Fase 2** — Diagnóstico "admin não vê usuários" (conta inativa → reativar) ← PRÓXIMA
 - [ ] **Fase 3** — Shell admin + Usuários + Aprovações (telas antes dos redirects)
 - [ ] **Fase 4** — Células (cep, refine TZ-safe, form multi-step, fix)
 - [ ] **Fase 5** — Perfil + /cadastro (estado civil checkbox)
@@ -25,11 +25,14 @@
 - 1.1 RBAC único em @icelula/shared (podeEditarPapel/opcoesDePapel/podeAgirSobre) → e3083f3
 - 0.2 papeis.js re-exporta shared + CORES_PAPEL/CORES_STATUS/statusDeUsuario → 9a3b55a
 - 0.3/0.4/0.5 mascaras/avatarCor/cidades → 06f4ac1
-- 0.6/0.11/0.14 Checkbox, RoleBadge/StatusBadge, Skeleton/EmptyState/ErrorState → (commit atual)
+- 0.6/0.11/0.14 Checkbox, RoleBadge/StatusBadge, Skeleton/EmptyState/ErrorState → 5199e0d(approx)
+- 0.8/0.15 Tabs + Toast (montado no App) → commit
+- 0.1/0.9/0.7 useOverlayDismiss (extraído do Sheet) + Modal + Popover → commit
+- 0.10/0.12/0.13 Combobox + RoleSelect + ContextSwitcher → commit (FASE 0 COMPLETA, build vite ok)
+- 1.2 guard PUT /usuarios/:id (admin não edita admin/super, self-exempt) + testes CI → commit
+- 1.3 garantir-super-admin.js + npm admin:super + entrypoint (verificado UPDATE 1 no DB) → commit
 
-### FALTA na Fase 0 (próximos)
-- 0.7 Popover, 0.8 Tabs, 0.9 Modal (usa hook 0.1), 0.10 Combobox, 0.12 RoleSelect (usa Popover+Sheet), 0.13 ContextSwitcher, 0.15 Toast+provider, 0.1 useOverlayDismiss (extrair do Sheet).
-- Depois: Fases 1–8 conforme plano v3.
+### Próximo: Fase 2 (rápida) → Fase 3 (shell admin + Usuários reformada, o grande payoff visível)
 
 ### NOTA ambiente
 - Testes de ROTA da API (que tocam Postgres) NÃO rodam do host macOS (Docker Desktop não expõe o DB ao host; só containers na rede-docker autenticam). Rodam no CI. Validar rotas via app real em localhost:3200. Testes de lógica pura (shared/lib/componentes jsdom) rodam local e estão verdes.
