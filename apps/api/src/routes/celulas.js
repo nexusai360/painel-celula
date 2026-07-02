@@ -17,11 +17,18 @@ function isP2002OnField(err, fieldName) {
   return String(target ?? '').includes(fieldName)
 }
 
+// Frequências suportadas: Semanal (7), Quinzenal (14), Mensal (28).
+const FREQUENCIAS_VALIDAS = [7, 14, 28]
+const frequenciaValida = z
+  .number()
+  .int()
+  .refine((v) => FREQUENCIAS_VALIDAS.includes(v), 'Frequência inválida')
+
 const celulaSchema = z.object({
   nome: z.string().min(1),
   descricao: z.string().optional(),
   diaSemana: z.number().int().min(0).max(6),
-  frequenciaDias: z.number().int().positive(),
+  frequenciaDias: frequenciaValida,
   dataPrimeiroEncontro: z.coerce.date(),
   liderId: z.string().optional()
 })
@@ -30,7 +37,7 @@ const updateCelulaSchema = z.object({
   nome: z.string().min(1).optional(),
   descricao: z.string().optional(),
   diaSemana: z.number().int().min(0).max(6).optional(),
-  frequenciaDias: z.number().int().positive().optional(),
+  frequenciaDias: frequenciaValida.optional(),
   dataPrimeiroEncontro: z.coerce.date().optional(),
   ativa: z.boolean().optional()
 })

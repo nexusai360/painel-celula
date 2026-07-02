@@ -33,7 +33,7 @@ const googleApiReal = {
     const cli = oauthClient(); cli.setCredentials({ access_token: accessToken })
     const cal = google.calendar({ version: 'v3', auth: cli })
     const { data } = await cal.calendars.insert({
-      requestBody: { summary: 'Hineni', timeZone: 'America/Sao_Paulo' }
+      requestBody: { summary: 'Painel de Célula', timeZone: 'America/Sao_Paulo' }
     })
     return data.id
   },

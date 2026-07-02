@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Link } from 'react-router-dom'
-import { CalendarDays, Home, Users2, HandHeart, Sparkles, Heart, Menu } from 'lucide-react'
+import { CalendarDays, Home, Users2, HandHeart, Sparkles, Heart, Menu, UserCheck } from 'lucide-react'
 import { Logo } from './ui/Logo.jsx'
 import { AvatarMenu } from './AvatarMenu.jsx'
 import { NavDrawer } from './NavDrawer.jsx'
@@ -9,7 +9,10 @@ import { useAuth } from '../context/AuthContext.jsx'
 // Fonte única dos itens de navegação por papel (consumida pela TopBar e pelo NavDrawer).
 export function linksPorPapel(usuario) {
   const { papel, celulaId } = usuario || {}
-  if (papel === 'ADMIN') return [{ to: '/app/celulas', label: 'Células', icon: Users2 }]
+  if (papel === 'ADMIN') return [
+    { to: '/app/celulas', label: 'Células', icon: Users2 },
+    { to: '/app/usuarios', label: 'Usuários', icon: UserCheck }
+  ]
   if (!celulaId) return []
   const links = [
     { to: '/app', label: 'Início', icon: Home, end: true },
@@ -32,7 +35,7 @@ export function TopBar() {
   return (
     <>
     <header className="sticky top-0 z-20 border-b border-border bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-      <div className="flex items-center justify-between px-5 py-2 md:px-[25px]">
+      <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 py-2.5">
         <div className="flex items-center gap-1.5">
           {links.length > 0 && (
             <button

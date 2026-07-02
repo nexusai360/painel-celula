@@ -1,6 +1,8 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
+import helmet from '@fastify/helmet'
+import rateLimit from '@fastify/rate-limit'
 import { healthRoutes } from './routes/health.js'
 import { configRoutes } from './routes/config.js'
 import { authRoutes } from './routes/auth.js'
@@ -14,7 +16,33 @@ import { pedidoRoutes } from './routes/pedidos.js'
 import { testemunhoRoutes } from './routes/testemunhos.js'
 
 export function buildApp() {
-  const app = Fastify({ logger: false })
+  const app = Fastify({ logger: false, trustProxy: true })
+
+  // Headers de segurança (CSP liberando as fontes do Google e avatares data:).
+  app.register(helmet, {
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+        imgSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        frameAncestors: ["'self'"]
+      }
+    }
+  })
+
+  // Rate limit global (anti força-bruta/abuso). Rotas sensíveis apertam mais.
+  app.register(rateLimit, {
+    max: 300,
+    timeWindow: '1 minute',
+    hook: 'preHandler',
+    allowList: (req) => req.url === '/health'
+  })
 
   // CORS: em produção, restrinja ao(s) domínio(s) do front via CORS_ORIGIN
   // (lista separada por vírgula). Sem a variável, libera qualquer origem (dev).

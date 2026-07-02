@@ -38,10 +38,9 @@ export function AuthProvider({ children }) {
   }
 
   async function cadastrar(dados) {
-    const { token, usuario: u } = await apiRegister(dados)
-    setToken(token)
-    setUsuario(u)
-    return u
+    // O cadastro nasce pendente de aprovação: a API não devolve token.
+    // Retornamos a resposta para a tela exibir a mensagem de "aguarde aprovação".
+    return apiRegister(dados)
   }
 
   function sair() {

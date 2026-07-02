@@ -30,5 +30,5 @@ if (existsSync(join(webDist, 'index.html'))) {
 
 app
   .listen({ port, host })
-  .then(() => console.log(`Hineni API ouvindo em http://${host}:${port}`))
+  .then(() => console.log(`Painel de Célula API ouvindo em http://${host}:${port}`))
   .catch((err) => { console.error(err); process.exit(1) })

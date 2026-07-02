@@ -72,11 +72,15 @@ export function AvatarUpload({ value, nome, onChange }) {
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={carregando}
-          aria-label="Trocar foto de perfil"
-          className="inline-flex h-11 min-w-[44px] items-center gap-1.5 rounded-full border border-border bg-card px-4 text-sm font-medium text-text transition-colors hover:border-brand hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+          aria-label={value ? 'Trocar foto de perfil' : 'Adicionar foto de perfil'}
+          className={`inline-flex h-11 min-w-[44px] items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer ${
+            value
+              ? 'border border-border bg-card font-medium text-text hover:border-brand hover:text-brand'
+              : 'brand-grad bg-brand text-on-brand shadow-sm'
+          }`}
         >
           <Camera className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-          Trocar foto
+          {value ? 'Trocar foto' : 'Adicionar foto'}
         </button>
 
         {value && (

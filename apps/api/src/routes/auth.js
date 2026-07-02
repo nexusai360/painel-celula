@@ -9,7 +9,7 @@ function assinarToken(app, user) {
 }
 
 export async function authRoutes(app) {
-  app.post('/auth/register', async (request, reply) => {
+  app.post('/auth/register', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parsed = registerSchema.safeParse(request.body)
     if (!parsed.success) {
       return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
@@ -26,27 +26,35 @@ export async function authRoutes(app) {
       celulaId = celula.id
     }
 
-    const user = await prisma.user.create({
-      data: { nome, email, senhaHash: await hashSenha(senha), papel: 'MEMBRO', celulaId },
-      ...COM_CELULA
+    // Auto-cadastro nasce PENDENTE (aprovado=false, default do schema): a conta
+    // só entra após um ADMIN aprovar. Não devolvemos token aqui.
+    await prisma.user.create({
+      data: { nome, email, senhaHash: await hashSenha(senha), papel: 'MEMBRO', celulaId }
     })
-    return reply.code(201).send({ token: assinarToken(app, user), usuario: comCelula(user) })
+    return reply.code(201).send({
+      pendente: true,
+      mensagem: 'Conta criada! Um administrador precisa aprovar seu acesso. Você poderá entrar assim que for aprovado.'
+    })
   })
 
-  app.post('/auth/login', async (request, reply) => {
+  app.post('/auth/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body)
     if (!parsed.success) return reply.code(400).send({ erro: 'Dados inválidos' })
     const { email, senha } = parsed.data
 
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user) return reply.code(401).send({ erro: 'Credenciais inválidas' })
-    if (!user.ativo) return reply.code(403).send({ erro: 'Usuário desativado' })
     if (!user.senhaHash) {
       return reply.code(401).send({ erro: 'Esta conta usa login com Google. Entre com Google.' })
     }
+    // Verifica a senha ANTES de revelar o estado da conta (evita enumeração).
     if (!(await verificarSenha(senha, user.senhaHash))) {
       return reply.code(401).send({ erro: 'Credenciais inválidas' })
     }
+    if (!user.aprovado) {
+      return reply.code(403).send({ erro: 'Sua conta está aguardando aprovação de um administrador.', pendente: true })
+    }
+    if (!user.ativo) return reply.code(403).send({ erro: 'Usuário desativado' })
 
     const atualizado = await prisma.user.update({
       where: { id: user.id }, data: { ultimoAcesso: new Date() }, ...COM_CELULA

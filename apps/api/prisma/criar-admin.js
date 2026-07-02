@@ -18,8 +18,8 @@ if (!email || !senha) {
 const senhaHash = await hashSenha(senha)
 const admin = await prisma.user.upsert({
   where: { email },
-  update: { papel: 'ADMIN', ativo: true, senhaHash },
-  create: { nome, email, senhaHash, papel: 'ADMIN' }
+  update: { papel: 'ADMIN', ativo: true, aprovado: true, senhaHash },
+  create: { nome, email, senhaHash, papel: 'ADMIN', aprovado: true }
 })
 console.log(`Admin pronto: ${admin.email} (papel ${admin.papel})`)
 await prisma.$disconnect()

@@ -7,7 +7,7 @@ export function Logo({ className = '' }) {
         <Users className="h-5 w-5" aria-hidden="true" />
       </span>
       <span className="font-display text-xl font-bold text-text whitespace-nowrap">
-        Hineni
+        Painel de Célula
       </span>
     </div>
   )

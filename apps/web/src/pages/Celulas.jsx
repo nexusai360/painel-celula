@@ -4,6 +4,8 @@ import { ChevronRight, Plus, Trash2, UserCog, Users2 } from 'lucide-react'
 import { Card } from '../components/ui/Card.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Input } from '../components/ui/Input.jsx'
+import { Select } from '../components/ui/Select.jsx'
+import { DateTimePicker } from '../components/ui/DateTimePicker.jsx'
 import { Tag } from '../components/ui/Tag.jsx'
 import { Spinner } from '../components/ui/Spinner.jsx'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog.jsx'
@@ -20,11 +22,10 @@ const DIAS = [0, 1, 2, 3, 4, 5, 6]
 const FREQUENCIAS = [
   { v: 7, label: 'Semanal' },
   { v: 14, label: 'Quinzenal' },
-  { v: 21, label: 'A cada 3 semanas' },
   { v: 28, label: 'Mensal' }
 ]
-const inputSelect =
-  'h-12 w-full rounded-xl border border-border bg-background px-4 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-brand'
+const OPCOES_DIA = DIAS.map((d) => ({ value: d, label: nomeDiaSemana(d) }))
+const OPCOES_FREQ = FREQUENCIAS.map((f) => ({ value: f.v, label: f.label }))
 
 function NovaCelula({ onCriada }) {
   const [aberto, setAberto] = useState(false)
@@ -72,23 +73,25 @@ function NovaCelula({ onCriada }) {
         <Input id="nome" label="Nome" value={form.nome} onChange={(e) => set('nome', e.target.value)} required />
         <Input id="descricao" label="Descrição (opcional)" value={form.descricao} onChange={(e) => set('descricao', e.target.value)} />
         <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-text">Dia da semana</label>
-            <select className={inputSelect} value={form.diaSemana} onChange={(e) => set('diaSemana', e.target.value)}>
-              {DIAS.map((d) => <option key={d} value={d}>{nomeDiaSemana(d)}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-text">Frequência</label>
-            <select className={inputSelect} value={form.frequenciaDias} onChange={(e) => set('frequenciaDias', e.target.value)}>
-              {FREQUENCIAS.map((f) => <option key={f.v} value={f.v}>{f.label}</option>)}
-            </select>
-          </div>
+          <Select
+            label="Dia da semana"
+            options={OPCOES_DIA}
+            value={form.diaSemana}
+            onChange={(v) => set('diaSemana', v)}
+          />
+          <Select
+            label="Frequência"
+            options={OPCOES_FREQ}
+            value={form.frequenciaDias}
+            onChange={(v) => set('frequenciaDias', v)}
+          />
         </div>
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-text">Primeiro encontro</label>
-          <input type="datetime-local" className={inputSelect} value={form.dataPrimeiroEncontro} onChange={(e) => set('dataPrimeiroEncontro', e.target.value)} required />
-        </div>
+        <DateTimePicker
+          label="Primeiro encontro"
+          value={form.dataPrimeiroEncontro}
+          onChange={(v) => set('dataPrimeiroEncontro', v)}
+          required
+        />
         {erro && <p role="alert" className="text-sm text-danger">{erro}</p>}
         <div className="flex gap-2">
           <Button type="submit" loading={salvando} className="w-auto px-5">Criar</Button>

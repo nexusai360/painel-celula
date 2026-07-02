@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { User, LogOut, Sun, Moon, Monitor } from 'lucide-react'
 import { Avatar } from './ui/Avatar.jsx'
+import { Tag } from './ui/Tag.jsx'
+import { ROTULO_PAPEL } from '../lib/papeis.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useTheme } from '../context/ThemeContext.jsx'
 
@@ -55,12 +57,18 @@ export function AvatarMenu() {
       {aberto && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-60 origin-top-right rounded-2xl border border-border bg-card p-2 shadow-lg z-30"
+          className="absolute right-0 mt-2 w-64 origin-top-right rounded-2xl border border-border bg-card p-2 shadow-lg z-30"
         >
           {/* Cabeçalho da conta */}
-          <div className="px-3 py-2">
-            <p className="truncate text-sm font-semibold text-text">{usuario?.nome}</p>
-            <p className="truncate text-xs text-text-muted">{usuario?.email}</p>
+          <div className="flex items-center gap-3 px-2.5 py-2.5">
+            <Avatar src={usuario?.avatar} nome={usuario?.nome} size={40} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-text">{usuario?.nome}</p>
+              <p className="truncate text-xs text-text-muted">{usuario?.email}</p>
+              {usuario?.papel && (
+                <Tag variant="brand" className="mt-1.5">{ROTULO_PAPEL[usuario.papel] ?? usuario.papel}</Tag>
+              )}
+            </div>
           </div>
 
           <div className="my-1 border-t border-border" />

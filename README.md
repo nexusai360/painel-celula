@@ -1,4 +1,4 @@
-# Hineni
+# Painel de Célula
 
 Plataforma de gestão de células cristãs — QR Code de entrada, presença, pedidos de
 oração, testemunhos, painel de "Vidas" e administração de células/membros.

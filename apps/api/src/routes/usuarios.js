@@ -25,10 +25,40 @@ export async function usuarioRoutes(app) {
         email: true,
         papel: true,
         celulaId: true,
-        ativo: true
+        ativo: true,
+        aprovado: true
       }
     })
     return reply.send({ usuarios })
+  })
+
+  // Lista contas pendentes de aprovação (ADMIN).
+  app.get('/usuarios/pendentes', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+    const usuarios = await prisma.user.findMany({
+      where: { aprovado: false },
+      orderBy: { criadoEm: 'asc' },
+      select: { id: true, nome: true, email: true, criadoEm: true }
+    })
+    return reply.send({ usuarios })
+  })
+
+  // Aprova uma conta pendente (ADMIN).
+  app.post('/usuarios/:id/aprovar', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+    const { id } = request.params
+    const alvo = await prisma.user.findUnique({ where: { id } })
+    if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
+    const user = await prisma.user.update({ where: { id }, data: { aprovado: true } })
+    return reply.send({ usuario: publico(user) })
+  })
+
+  // Recusa e remove uma conta ainda pendente (ADMIN).
+  app.post('/usuarios/:id/recusar', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+    const { id } = request.params
+    const alvo = await prisma.user.findUnique({ where: { id } })
+    if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
+    if (alvo.aprovado) return reply.code(400).send({ erro: 'Conta já aprovada; use desativar.' })
+    await prisma.user.delete({ where: { id } })
+    return reply.send({ ok: true })
   })
 
   // Edita um membro (ADMIN): nome, email, whatsapp, ativo. Soft-delete via ativo:false.

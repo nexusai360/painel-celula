@@ -125,6 +125,20 @@ export async function apiListarUsuarios(busca) {
   return data.usuarios
 }
 
+export async function apiUsuariosPendentes() {
+  const { data } = await api.get('/usuarios/pendentes')
+  return data.usuarios
+}
+
+export async function apiAprovarUsuario(id) {
+  const { data } = await api.post(`/usuarios/${id}/aprovar`)
+  return data.usuario
+}
+
+export async function apiRecusarUsuario(id) {
+  await api.post(`/usuarios/${id}/recusar`)
+}
+
 // ---- Config ----
 export async function apiConfig() {
   const { data } = await api.get('/config')

@@ -11,6 +11,7 @@ import Register from './pages/Register.jsx'
 import AppHome from './pages/AppHome.jsx'
 import Calendario from './pages/Calendario.jsx'
 import Celulas from './pages/Celulas.jsx'
+import Usuarios from './pages/Usuarios.jsx'
 import CelulaDetalhe from './pages/CelulaDetalhe.jsx'
 import Perfil from './pages/Perfil.jsx'
 import GoogleSucesso from './pages/GoogleSucesso.jsx'
@@ -28,6 +29,11 @@ function InicioOuCelulas() {
 function SoLider({ children }) {
   const { usuario } = useAuth()
   return usuario?.papel === 'LIDER' ? children : <Navigate to="/app" replace />
+}
+
+function SoAdmin({ children }) {
+  const { usuario } = useAuth()
+  return usuario?.papel === 'ADMIN' ? children : <Navigate to="/app" replace />
 }
 
 export default function App() {
@@ -50,6 +56,7 @@ export default function App() {
               <Route path="/app/calendario" element={<Calendario />} />
               <Route path="/app/perfil" element={<Perfil />} />
               <Route path="/app/celulas" element={<Celulas />} />
+              <Route path="/app/usuarios" element={<SoAdmin><Usuarios /></SoAdmin>} />
               <Route path="/app/celula/:id" element={<CelulaDetalhe />} />
               <Route path="/app/pedidos" element={<MeusPedidos />} />
               <Route path="/app/pedidos/novo" element={<PedidoForm />} />
