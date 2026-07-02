@@ -11,7 +11,8 @@ describe('papeis (web)', () => {
   it('CORES_STATUS cobre os 3 estados', () => {
     expect(CORES_STATUS.PENDENTE.label).toBe('Em aprovação')
     expect(CORES_STATUS.ATIVO.chip).toContain('emerald')
-    expect(CORES_STATUS.INATIVO.chip).toContain('red')
+    expect(CORES_STATUS.INATIVO.chip).toContain('zinc')
+    expect(CORES_STATUS.REPROVADO.chip).toContain('red')
   })
   it('statusDeUsuario deriva corretamente', () => {
     expect(statusDeUsuario({ ativo: false, aprovado: true })).toBe('INATIVO')
