@@ -106,7 +106,14 @@ ADMIN/SUPER_ADMIN. ADMIN pode gerenciar MEMBRO↔LIDER e (des)ativar contas.
 - [x] Plano criado.
 - [x] Fase 0 — SUPER_ADMIN (enum+migration, dono promovido no boot, regras de edição de papel, front reconhece super admin como admin).
 - [x] Fase 1 — Gestão de usuários (listar todos + busca, trocar nível com regras super/admin, ativar/desativar, legenda de papéis). Bug "não vejo usuários" resolvido.
-- [ ] Fase 2 — Cadastro + seleção de célula + aprovação por líder.
+- [x] Fase 2 (núcleo) — Cadastro com AUTO-LOGIN pendente; tela de seleção de célula
+  (cards: bairro, dia/horário, frequência, líderes com scroll horizontal); tela
+  "aguardando aprovação"; TRAVA do pendente (backend via requireRole+aprovado com
+  leitura fresca do DB, e frontend via gate — só perfil/seleção/aguardando);
+  aprovação por LÍDER (só a própria célula) ou ADMIN+; endpoint /celulas/publicas
+  e /perfil/celula. `aprovado` default true (só register grava false).
+  PENDENTE/DEFERIDO: armazenamento de MÚLTIPLOS líderes (hoje 1 líder por célula;
+  a UI já lida com array). Login de pendente é permitido (entra na área travada).
 - [x] Fase 3 — Endereço da célula (cidade/bairro/endereço/número/complemento/ponto ref; migration aditiva; form de criar célula). Só bairro exposto na seleção (Fase 2).
 - [ ] Fase 4 — Perfil + cônjuge.
 - [ ] Fase 5 — QR presença.

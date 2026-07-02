@@ -55,18 +55,18 @@ describe('auth', () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it('cadastra um membro sem qrToken (201) como PENDENTE, sem token', async () => {
+  it('cadastra um membro sem qrToken (201) com AUTO-LOGIN e pendente', async () => {
     const res = await app.inject({
       method: 'POST', url: '/auth/register',
       payload: { nome: 'Teste', email, senha: '123456' }
     })
     expect(res.statusCode).toBe(201)
     const body = res.json()
+    expect(body.token).toBeTypeOf('string')   // auto-login
     expect(body.pendente).toBe(true)
-    expect(body.token).toBeUndefined()
-    // A conta é criada como MEMBRO e ainda não aprovada.
+    expect(body.usuario.papel).toBe('MEMBRO')
+    expect(body.usuario.senhaHash).toBeUndefined()
     const criado = await prisma.user.findUnique({ where: { email } })
-    expect(criado.papel).toBe('MEMBRO')
     expect(criado.aprovado).toBe(false)
   })
 
@@ -100,13 +100,25 @@ describe('auth', () => {
     expect(res.json()).toEqual({ erro: 'Célula não encontrada' })
   })
 
-  it('bloqueia login de conta ainda não aprovada (403)', async () => {
+  it('login de conta pendente é permitido (200) — entra na área travada', async () => {
     const res = await app.inject({
       method: 'POST', url: '/auth/login',
       payload: { email, senha: '123456' }
     })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().token).toBeTypeOf('string')
+    expect(res.json().usuario.aprovado).toBe(false)
+  })
+
+  it('pendente é bloqueado em rota protegida sem permitirPendente (403)', async () => {
+    const login = await app.inject({ method: 'POST', url: '/auth/login', payload: { email, senha: '123456' } })
+    const token = login.json().token
+    // /usuarios exige ADMIN e não permite pendente → 403
+    const res = await app.inject({ method: 'GET', url: '/usuarios', headers: { authorization: `Bearer ${token}` } })
     expect(res.statusCode).toBe(403)
-    expect(res.json().pendente).toBe(true)
+    // mas /auth/me (permitirPendente) funciona
+    const me = await app.inject({ method: 'GET', url: '/auth/me', headers: { authorization: `Bearer ${token}` } })
+    expect(me.statusCode).toBe(200)
   })
 
   it('faz login (200) após aprovação e acessa /auth/me com o token', async () => {

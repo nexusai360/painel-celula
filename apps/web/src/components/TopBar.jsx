@@ -10,6 +10,8 @@ import { useAuth } from '../context/AuthContext.jsx'
 // Fonte única dos itens de navegação por papel (consumida pela TopBar e pelo NavDrawer).
 export function linksPorPapel(usuario) {
   const { papel, celulaId } = usuario || {}
+  // Usuário pendente (não aprovado) não vê navegação — só perfil/aguardando.
+  if (usuario?.aprovado === false) return []
   if (ehAdmin(papel)) return [
     { to: '/app/celulas', label: 'Células', icon: Users2 },
     { to: '/app/usuarios', label: 'Usuários', icon: UserCheck }
@@ -22,6 +24,7 @@ export function linksPorPapel(usuario) {
   ]
   if (papel === 'LIDER') {
     links.push({ to: `/app/celula/${celulaId}`, label: 'Minha Célula', icon: Users2 })
+    links.push({ to: '/app/usuarios', label: 'Aprovações', icon: UserCheck })
     links.push({ to: '/app/testemunhos', label: 'Testemunhos', icon: Sparkles })
     links.push({ to: '/app/vidas', label: 'Vidas', icon: Heart })
   }

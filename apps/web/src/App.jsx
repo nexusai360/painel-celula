@@ -1,10 +1,10 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { ThemeProvider } from './context/ThemeContext.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { ConfigProvider } from './context/ConfigContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 import { ProtectedRoute } from './routes/ProtectedRoute.jsx'
-import { ehAdmin } from './lib/papeis.js'
+import { ehAdmin, PAPEL_RANK } from './lib/papeis.js'
 import { AppLayout } from './components/AppLayout.jsx'
 import QrLanding from './pages/QrLanding.jsx'
 import Login from './pages/Login.jsx'
@@ -13,6 +13,8 @@ import AppHome from './pages/AppHome.jsx'
 import Calendario from './pages/Calendario.jsx'
 import Celulas from './pages/Celulas.jsx'
 import Usuarios from './pages/Usuarios.jsx'
+import SelecionarCelula from './pages/SelecionarCelula.jsx'
+import Aguardando from './pages/Aguardando.jsx'
 import CelulaDetalhe from './pages/CelulaDetalhe.jsx'
 import Perfil from './pages/Perfil.jsx'
 import GoogleSucesso from './pages/GoogleSucesso.jsx'
@@ -37,6 +39,26 @@ function SoAdmin({ children }) {
   return ehAdmin(usuario?.papel) ? children : <Navigate to="/app" replace />
 }
 
+function SoGestor({ children }) {
+  const { usuario } = useAuth()
+  return (PAPEL_RANK[usuario?.papel] || 0) >= PAPEL_RANK.LIDER ? children : <Navigate to="/app" replace />
+}
+
+// Trava do usuário pendente: só acessa seleção de célula, "aguardando" e o perfil.
+function AppComGate() {
+  const { usuario } = useAuth()
+  const { pathname } = useLocation()
+  if (usuario && usuario.aprovado === false) {
+    if (!usuario.celulaId) {
+      if (pathname !== '/app/selecionar-celula') return <Navigate to="/app/selecionar-celula" replace />
+    } else {
+      const liberadas = ['/app/aguardando', '/app/perfil', '/app/selecionar-celula']
+      if (!liberadas.includes(pathname)) return <Navigate to="/app/aguardando" replace />
+    }
+  }
+  return <AppLayout />
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -52,12 +74,14 @@ export default function App() {
             <Route path="/auth/google/sucesso" element={<GoogleSucesso />} />
 
             {/* Protected layout route — wraps all /app* paths */}
-            <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+            <Route element={<ProtectedRoute><AppComGate /></ProtectedRoute>}>
               <Route path="/app" element={<InicioOuCelulas />} />
+              <Route path="/app/selecionar-celula" element={<SelecionarCelula />} />
+              <Route path="/app/aguardando" element={<Aguardando />} />
               <Route path="/app/calendario" element={<Calendario />} />
               <Route path="/app/perfil" element={<Perfil />} />
               <Route path="/app/celulas" element={<Celulas />} />
-              <Route path="/app/usuarios" element={<SoAdmin><Usuarios /></SoAdmin>} />
+              <Route path="/app/usuarios" element={<SoGestor><Usuarios /></SoGestor>} />
               <Route path="/app/celula/:id" element={<CelulaDetalhe />} />
               <Route path="/app/pedidos" element={<MeusPedidos />} />
               <Route path="/app/pedidos/novo" element={<PedidoForm />} />

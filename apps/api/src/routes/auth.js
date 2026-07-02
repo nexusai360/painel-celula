@@ -26,14 +26,17 @@ export async function authRoutes(app) {
       celulaId = celula.id
     }
 
-    // Auto-cadastro nasce PENDENTE (aprovado=false, default do schema): a conta
-    // só entra após um ADMIN aprovar. Não devolvemos token aqui.
-    await prisma.user.create({
-      data: { nome, email, senhaHash: await hashSenha(senha), papel: 'MEMBRO', celulaId }
+    // Auto-cadastro nasce PENDENTE (aprovado=false). Fazemos AUTO-LOGIN: o usuário
+    // entra já logado, mas travado — só acessa a seleção de célula e o perfil até
+    // ser aprovado por um líder da célula escolhida (ou por um admin).
+    const user = await prisma.user.create({
+      data: { nome, email, senhaHash: await hashSenha(senha), papel: 'MEMBRO', celulaId, aprovado: false },
+      ...COM_CELULA
     })
     return reply.code(201).send({
-      pendente: true,
-      mensagem: 'Conta criada! Um administrador precisa aprovar seu acesso. Você poderá entrar assim que for aprovado.'
+      token: assinarToken(app, user),
+      usuario: comCelula(user),
+      pendente: !user.aprovado
     })
   })
 
@@ -51,10 +54,9 @@ export async function authRoutes(app) {
     if (!(await verificarSenha(senha, user.senhaHash))) {
       return reply.code(401).send({ erro: 'Credenciais inválidas' })
     }
-    if (!user.aprovado) {
-      return reply.code(403).send({ erro: 'Sua conta está aguardando aprovação de um administrador.', pendente: true })
-    }
     if (!user.ativo) return reply.code(403).send({ erro: 'Usuário desativado' })
+    // Pendentes PODEM logar (entram na área travada: seleção de célula / perfil).
+    // O bloqueio dos recursos é feito por rota (requireRole sem permitirPendente).
 
     const atualizado = await prisma.user.update({
       where: { id: user.id }, data: { ultimoAcesso: new Date() }, ...COM_CELULA
@@ -62,7 +64,7 @@ export async function authRoutes(app) {
     return reply.send({ token: assinarToken(app, atualizado), usuario: comCelula(atualizado) })
   })
 
-  app.get('/auth/me', { preHandler: requireRole('MEMBRO') }, async (request, reply) => {
+  app.get('/auth/me', { preHandler: requireRole('MEMBRO', { permitirPendente: true }) }, async (request, reply) => {
     const user = await prisma.user.findUnique({ where: { id: request.usuario.id }, ...COM_CELULA })
     if (!user) return reply.code(404).send({ erro: 'Usuário não encontrado' })
     return reply.send({ usuario: comCelula(user) })

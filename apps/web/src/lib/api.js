@@ -149,6 +149,17 @@ export async function apiAtualizarUsuarioAtivo(id, ativo) {
   return data.usuario
 }
 
+// ---- Onboarding: seleção de célula ----
+export async function apiCelulasPublicas() {
+  const { data } = await api.get('/celulas/publicas')
+  return data.celulas
+}
+
+export async function apiSelecionarCelula(celulaId) {
+  const { data } = await api.post('/perfil/celula', { celulaId })
+  return data.usuario
+}
+
 // ---- Config ----
 export async function apiConfig() {
   const { data } = await api.get('/config')

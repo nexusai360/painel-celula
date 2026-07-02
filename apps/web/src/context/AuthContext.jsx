@@ -38,9 +38,12 @@ export function AuthProvider({ children }) {
   }
 
   async function cadastrar(dados) {
-    // O cadastro nasce pendente de aprovação: a API não devolve token.
-    // Retornamos a resposta para a tela exibir a mensagem de "aguarde aprovação".
-    return apiRegister(dados)
+    // Auto-login: entra já logado, porém pendente (a app o leva à seleção de
+    // célula e depois à tela de "aguardando aprovação"; recursos ficam travados).
+    const { token, usuario: u } = await apiRegister(dados)
+    setToken(token)
+    setUsuario(u)
+    return u
   }
 
   function sair() {

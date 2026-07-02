@@ -39,9 +39,9 @@ model User {
   celula       Celula?   @relation("MembrosDaCelula", fields: [celulaId], references: [id])
   celulaId     String?
   ativo        Boolean   @default(true)
-  // Auto-cadastro fica pendente até um ADMIN aprovar. Contas criadas por
-  // admin/seed nascem aprovadas.
-  aprovado     Boolean   @default(false)
+  // Default true: contas nascem aprovadas. Só o AUTO-CADASTRO (rota /auth/register)
+  // grava aprovado=false explicitamente, ficando pendente até um líder/admin aprovar.
+  aprovado     Boolean   @default(true)
   ultimoAcesso DateTime?
   criadoEm     DateTime  @default(now())
   avatar       String?   @db.Text

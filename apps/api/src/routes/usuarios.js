@@ -1,9 +1,15 @@
 import { prisma } from '../prisma.js'
-import { requireRole, podeEditarPapel } from '../lib/roles.js'
+import { requireRole, podeEditarPapel, temNivel } from '../lib/roles.js'
 import { usuarioAdminUpdateSchema, normalizarWhatsapp } from '@icelula/shared'
 import { publico } from '../lib/usuarios.js'
 
 const PAPEIS_VALIDOS = ['MEMBRO', 'LIDER', 'ADMIN', 'SUPER_ADMIN']
+
+// ADMIN+ gerencia qualquer pendente; LÍDER só pendentes da própria célula.
+function podeGerenciarPendente(usuario, alvo) {
+  if (temNivel(usuario.papel, 'ADMIN')) return true
+  return !!usuario.celulaId && alvo.celulaId === usuario.celulaId
+}
 
 export async function usuarioRoutes(app) {
   // Lista/busca usuários (ADMIN) — usado para atribuir líder. Nunca expõe senhaHash.
@@ -34,21 +40,24 @@ export async function usuarioRoutes(app) {
     return reply.send({ usuarios })
   })
 
-  // Lista contas pendentes de aprovação (ADMIN).
-  app.get('/usuarios/pendentes', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+  // Lista contas pendentes: ADMIN+ vê todas; LÍDER vê só as da própria célula.
+  app.get('/usuarios/pendentes', { preHandler: requireRole('LIDER') }, async (request, reply) => {
+    const admin = temNivel(request.usuario.papel, 'ADMIN')
+    const where = { aprovado: false, ...(admin ? {} : { celulaId: request.usuario.celulaId }) }
     const usuarios = await prisma.user.findMany({
-      where: { aprovado: false },
+      where,
       orderBy: { criadoEm: 'asc' },
-      select: { id: true, nome: true, email: true, criadoEm: true }
+      select: { id: true, nome: true, email: true, criadoEm: true, celula: { select: { nome: true } } }
     })
-    return reply.send({ usuarios })
+    return reply.send({ usuarios: usuarios.map((u) => ({ id: u.id, nome: u.nome, email: u.email, criadoEm: u.criadoEm, celulaNome: u.celula?.nome ?? null })) })
   })
 
-  // Aprova uma conta pendente (ADMIN).
-  app.post('/usuarios/:id/aprovar', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+  // Aprova uma conta pendente (ADMIN+ qualquer; LÍDER só da própria célula).
+  app.post('/usuarios/:id/aprovar', { preHandler: requireRole('LIDER') }, async (request, reply) => {
     const { id } = request.params
     const alvo = await prisma.user.findUnique({ where: { id } })
     if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
+    if (!podeGerenciarPendente(request.usuario, alvo)) return reply.code(403).send({ erro: 'Sem permissão' })
     const user = await prisma.user.update({ where: { id }, data: { aprovado: true } })
     return reply.send({ usuario: publico(user) })
   })
@@ -71,12 +80,13 @@ export async function usuarioRoutes(app) {
     return reply.send({ usuario: publico(user) })
   })
 
-  // Recusa e remove uma conta ainda pendente (ADMIN).
-  app.post('/usuarios/:id/recusar', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
+  // Recusa e remove uma conta ainda pendente (ADMIN+ qualquer; LÍDER só da sua célula).
+  app.post('/usuarios/:id/recusar', { preHandler: requireRole('LIDER') }, async (request, reply) => {
     const { id } = request.params
     const alvo = await prisma.user.findUnique({ where: { id } })
     if (!alvo) return reply.code(404).send({ erro: 'Usuário não encontrado' })
     if (alvo.aprovado) return reply.code(400).send({ erro: 'Conta já aprovada; use desativar.' })
+    if (!podeGerenciarPendente(request.usuario, alvo)) return reply.code(403).send({ erro: 'Sem permissão' })
     await prisma.user.delete({ where: { id } })
     return reply.send({ ok: true })
   })

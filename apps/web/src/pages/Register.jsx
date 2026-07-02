@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useSearchParams } from 'react-router-dom'
-import { MailCheck } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { registerSchema } from '@icelula/shared'
 import { AuthLayout } from '../components/AuthLayout.jsx'
 import { Card } from '../components/ui/Card.jsx'
@@ -13,10 +12,10 @@ import { BotaoGoogle } from '../components/BotaoGoogle.jsx'
 
 export default function Register() {
   const { cadastrar } = useAuth()
+  const navigate = useNavigate()
   const [params] = useSearchParams()
   const qrToken = params.get('celula') || undefined
   const [erroApi, setErroApi] = useState('')
-  const [pendente, setPendente] = useState(null)
   const {
     register,
     handleSubmit,
@@ -26,31 +25,12 @@ export default function Register() {
   async function onSubmit(dados) {
     setErroApi('')
     try {
-      const r = await cadastrar({ ...dados, qrToken })
-      setPendente(r?.mensagem || 'Conta criada! Aguarde a aprovação de um administrador.')
+      // Auto-login; a app roteia o usuário pendente para a seleção de célula.
+      await cadastrar({ ...dados, qrToken })
+      navigate('/app', { replace: true })
     } catch (e) {
       setErroApi(e?.response?.data?.erro || 'Não foi possível criar a conta. Tente novamente.')
     }
-  }
-
-  if (pendente) {
-    return (
-      <AuthLayout>
-        <Card className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-success/15">
-            <MailCheck className="h-7 w-7 text-success" aria-hidden="true" />
-          </div>
-          <h1 className="text-xl font-bold text-text">Conta criada!</h1>
-          <p className="mt-2 text-sm text-text-muted">{pendente}</p>
-          <Link
-            to="/entrar"
-            className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-xl border border-border bg-card px-5 text-sm font-semibold text-text transition-colors hover:border-brand hover:text-brand"
-          >
-            Voltar para o login
-          </Link>
-        </Card>
-      </AuthLayout>
-    )
   }
 
   return (

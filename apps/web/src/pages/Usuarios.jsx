@@ -39,9 +39,11 @@ export default function Usuarios() {
   async function carregarUsuarios(q = '') {
     try { setUsuarios(await apiListarUsuarios(q)) } catch { setErro('Não foi possível carregar os usuários.') }
   }
+  const gestor = ehAdmin(eu?.papel)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { carregarPendentes(); carregarUsuarios() }, [])
+  useEffect(() => { carregarPendentes(); if (gestor) carregarUsuarios() }, [])
   useEffect(() => {
+    if (!gestor) return
     const t = setTimeout(() => carregarUsuarios(busca), 300)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,7 +99,8 @@ export default function Usuarios() {
 
       {erro && <p className="mb-3 text-sm text-danger" role="alert">{erro}</p>}
 
-      {/* Legenda de papéis */}
+      {/* Legenda de papéis (só para gestores) */}
+      {gestor && (
       <Card className="mb-6">
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-text">
           <ShieldCheck className="h-4 w-4 text-brand" /> Níveis de acesso
@@ -111,6 +114,7 @@ export default function Usuarios() {
           ))}
         </ul>
       </Card>
+      )}
 
       {/* Aprovações pendentes */}
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">
@@ -131,6 +135,7 @@ export default function Usuarios() {
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-text">{u.nome}</p>
                 <p className="truncate text-sm text-text-muted">{u.email}</p>
+                {u.celulaNome && <p className="truncate text-xs text-brand">Célula: {u.celulaNome}</p>}
               </div>
               <span className="hidden shrink-0 text-xs text-text-muted sm:block">{formatarData(u.criadoEm)}</span>
               <div className="flex shrink-0 items-center gap-2">
@@ -148,7 +153,8 @@ export default function Usuarios() {
         </div>
       )}
 
-      {/* Todos os usuários */}
+      {/* Todos os usuários (gestão de níveis — só admin+) */}
+      {gestor && (<>
       <div className="mb-3 mt-8 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-text-muted">Todos os usuários</h2>
       </div>
@@ -193,6 +199,7 @@ export default function Usuarios() {
           ))}
         </div>
       )}
+      </>)}
     </>
   )
 }

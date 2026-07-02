@@ -149,6 +149,27 @@ export async function celulaRoutes(app) {
     return reply.send({ celulas })
   })
 
+  // ── GET /celulas/publicas (seleção no onboarding — permite pendente) ─────────
+  // Só expõe o essencial para escolher: bairro, dia, horário, frequência e os
+  // líderes (nome + foto). Nunca o endereço completo.
+  app.get('/celulas/publicas', { preHandler: requireRole('MEMBRO', { permitirPendente: true }) }, async (request, reply) => {
+    const celulas = await prisma.celula.findMany({
+      where: { ativa: true },
+      orderBy: { nome: 'asc' },
+      select: {
+        id: true, nome: true, bairro: true, diaSemana: true,
+        frequenciaDias: true, dataPrimeiroEncontro: true,
+        lider: { select: { nome: true, avatar: true } }
+      }
+    })
+    const lista = celulas.map((c) => ({
+      id: c.id, nome: c.nome, bairro: c.bairro, diaSemana: c.diaSemana,
+      frequenciaDias: c.frequenciaDias, dataPrimeiroEncontro: c.dataPrimeiroEncontro,
+      lideres: c.lider ? [c.lider] : []
+    }))
+    return reply.send({ celulas: lista })
+  })
+
   // ── GET /celulas/:id (escopo) ───────────────────────────────────────────────
   app.get('/celulas/:id', { preHandler: requireRole('LIDER') }, async (request, reply) => {
     const { id } = request.params
