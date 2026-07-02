@@ -178,23 +178,53 @@ model Testemunho {
 model Notificacao {
   id       String   @id @default(cuid())
   autorId  String
-  escopo   String   // GLOBAL | CELULA
-  celulaId String?
   titulo   String
   corpo    String
   criadoEm DateTime @default(now())
 
-  @@index([celulaId])
+  // Público-alvo (3 eixos combináveis, AND). *Todas=true => eixo não-restritivo.
+  celulasTodas       Boolean        @default(false)
+  celulasAlvo        String[]       @default([])
+  qualificacoesTodas Boolean        @default(false)
+  qualificacoesAlvo  Qualificacao[] @default([])
+  niveisTodas        Boolean        @default(false)
+  niveisAlvo         NivelAcesso[]  @default([])
+
+  leituras NotificacaoLeitura[]
+
   @@index([criadoEm])
 }
 
+// Leitura por item (com carimbo de data/hora com segundos).
+model NotificacaoLeitura {
+  id            String      @id @default(cuid())
+  notificacao   Notificacao @relation(fields: [notificacaoId], references: [id], onDelete: Cascade)
+  notificacaoId String
+  userId        String
+  lidaEm        DateTime    @default(now())
+
+  @@unique([userId, notificacaoId])
+  @@index([userId])
+}
+
 // Banner administrativo (aviso no topo da plataforma). Um registro ativo por vez.
+// Banner do topo — vários, cada um com expiração obrigatória e público-alvo (3 eixos).
 model Banner {
-  id             String   @id @default(cuid())
-  mensagem       String
-  ativo          Boolean  @default(false)
-  atualizadoPorId String?
-  atualizadoEm   DateTime @updatedAt @default(now())
+  id       String   @id @default(cuid())
+  mensagem String
+  ativo    Boolean  @default(true)
+  expiraEm DateTime
+  autorId  String?
+  criadoEm DateTime @default(now())
+
+  celulasTodas       Boolean        @default(false)
+  celulasAlvo        String[]       @default([])
+  qualificacoesTodas Boolean        @default(false)
+  qualificacoesAlvo  Qualificacao[] @default([])
+  niveisTodas        Boolean        @default(false)
+  niveisAlvo         NivelAcesso[]  @default([])
+
+  @@index([ativo, expiraEm])
 }
 
 // Solicitação de vínculo de cônjuge (duplo opt-in): o alvo precisa aceitar.
