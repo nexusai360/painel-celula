@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { User, LogOut, Sun, Moon, Monitor } from 'lucide-react'
+import { User, LogOut, Sun, Moon, Monitor, ChevronRight } from 'lucide-react'
 import { Avatar } from './ui/Avatar.jsx'
-import { Tag } from './ui/Tag.jsx'
-import { ROTULO_PAPEL } from '../lib/papeis.js'
+import { RoleBadge } from './ui/RoleBadge.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useTheme } from '../context/ThemeContext.jsx'
 
@@ -66,26 +65,27 @@ export function AvatarMenu() {
               <p className="truncate text-sm font-semibold text-text">{usuario?.nome}</p>
               <p className="truncate text-xs text-text-muted">{usuario?.email}</p>
               {usuario?.papel && (
-                <Tag variant="brand" className="mt-1.5">{ROTULO_PAPEL[usuario.papel] ?? usuario.papel}</Tag>
+                <div className="mt-1.5"><RoleBadge papel={usuario.papel} /></div>
               )}
             </div>
           </div>
 
           <div className="my-1 border-t border-border" />
 
-          {/* Perfil */}
+          {/* Perfil — item destacado */}
           <button
             role="menuitem"
             type="button"
             onClick={() => { setAberto(false); navigate('/app/perfil') }}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm text-text hover:bg-surface focus:outline-none focus-visible:bg-surface cursor-pointer"
+            className="flex w-full items-center gap-3 rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-text transition-colors hover:border-brand hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-brand cursor-pointer"
           >
-            <User className="h-4 w-4 text-text-muted" aria-hidden="true" />
-            Perfil
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/10 text-brand"><User className="h-4 w-4" /></span>
+            <span className="flex-1 text-left">Meu perfil</span>
+            <ChevronRight className="h-4 w-4 text-text-muted" aria-hidden="true" />
           </button>
 
           {/* Tema */}
-          <div className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <div className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
             Tema
           </div>
           <div role="group" aria-label="Tema" className="grid grid-cols-3 gap-1 px-1 pb-1">
