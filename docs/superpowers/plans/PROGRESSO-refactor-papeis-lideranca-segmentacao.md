@@ -18,14 +18,16 @@
   - [x] T9 drop `papel` + enum `Papel` — banco e código limpos
   - **✅ FASE A COMPLETA E LIVE NO 3200.** (nota: helpers JS legados CORES_PAPEL/RoleBadge/
     podeEditarPapel etc. ficaram como código morto inócuo — limpeza opcional no fim.)
-- **FASE B** — Liderança N:N + admin sem célula + aprovação de célula ← EM ANDAMENTO
-  - [ ] B1 schema: junção `lideres` N:N (remove liderId/celulaLiderada) + `Celula.status` + `criadaPorId` + migração/backfill
-  - [ ] B2 escopo.js: podeGerenciarCelula por junção; callers (celulas/presenca/encontros)
-  - [ ] B3 rotas célula: include lideres; POST/DELETE lideres; criar por lider/pastor/admin (pendente); GET pendentes + POST aprovar; publicas exigem APROVADA
-  - [ ] B4 rebaixamento travado (>1 celula bloqueia; 1 vira membro; 0 livre) em PATCH qualificacao
-  - [ ] B5 admin sem celula (TopBar/AppHome/ContextSwitcher)
-  - [ ] B6 frontend: Celulas multi-lider (add/remove), CelulaDetalhe/MembrosPanel, aprovacao de celulas, NovaCelula p/ lider
-  - [ ] B7 aprovar/recusar pendente por celulas lideradas (junção)
+- **✅ FASE B COMPLETA E LIVE NO 3200** — validada E2E (líder cria→pendente→admin aprova→públicas; add/remove líder; escopo por junção; rebaixamento travado)
+  - [x] B1 schema junção N:N + status + criadaPorId + migração (marcada applied local; re-executável p/ prod)
+  - [x] B2 escopo.js por junção; callers carregam lideres
+  - [x] B3 rotas célula: lideres include; POST/DELETE lideres; criar lider/pastor/admin; pendentes+aprovar; publicas APROVADA
+  - [x] B4 trava de rebaixamento (PATCH qualificacao)
+  - [x] B5 admin sem célula (guards ok; TopBar por qualificação)
+  - [x] B6 frontend multi-líder + aba Aprovações + rota Criar célula p/ líder + MembrosPanel/CelulaDetalhe
+  - [x] B7 pendentes/aprovar/recusar por células lideradas
+- **FASE C** — Segmentação (3 eixos AND: células/qualificações/níveis com flags Todos; dedup) + banner CRUD carrossel/expiração + notificação leitura por item (NotificacaoLeitura) + marcar-tudo + modal — ← PRÓXIMA
+- **⚠️ PRÉ-DEPLOY OBRIGATÓRIO:** os testes de rota da API (celulas/usuarios/presenca/encontros/testemunhos/escopo.test.js) referenciam `liderId`/`papel` — quebrados pelo refactor A+B. Precisam ser reescritos para o novo modelo ANTES do push/deploy (rodam no CI). Passe dedicado.
 - **FASE C** — Segmentação (banner carrossel/expiração + notificação alvo 3 eixos + leitura por item) — (após B)
 - **DEPLOY** — push na `main` → CI → GHCR → Shepherd; acompanhar até prod no ar; avisar o dono.
 
