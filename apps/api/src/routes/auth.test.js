@@ -84,11 +84,11 @@ describe('auth', () => {
       payload: { nome: 'Membro QR', email: membroEmail, senha: 'senha123', qrToken: `qr-test-${sufixo}` }
     })
     expect(res.statusCode).toBe(201)
-    expect(res.json().pendente).toBe(true)
-    // Vínculo com a célula é gravado mesmo estando pendente de aprovação.
+    // Via QR válido = confiança: já aprovado e vinculado (sem aprovação de líder).
+    expect(res.json().pendente).toBe(false)
     const criado = await prisma.user.findUnique({ where: { email: membroEmail } })
     expect(criado.celulaId).toBe(celulaId)
-    expect(criado.aprovado).toBe(false)
+    expect(criado.aprovado).toBe(true)
   })
 
   it('rejeita qrToken desconhecido (404)', async () => {
