@@ -6,6 +6,7 @@ import { useAuth } from './context/AuthContext.jsx'
 import { ProtectedRoute } from './routes/ProtectedRoute.jsx'
 import { ehAdmin, PAPEL_RANK } from './lib/papeis.js'
 import { AppLayout } from './components/AppLayout.jsx'
+import { ToastProvider } from './components/ui/Toast.jsx'
 import QrLanding from './pages/QrLanding.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
@@ -68,6 +69,7 @@ export default function App() {
       <BrowserRouter>
         <ConfigProvider>
         <AuthProvider>
+          <ToastProvider>
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<Navigate to="/entrar" replace />} />
@@ -95,6 +97,7 @@ export default function App() {
 
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </ToastProvider>
         </AuthProvider>
         </ConfigProvider>
       </BrowserRouter>
