@@ -3,6 +3,7 @@ import { Megaphone, Send } from 'lucide-react'
 import { Checkbox } from '../../components/ui/Checkbox.jsx'
 import { Button } from '../../components/ui/Button.jsx'
 import { Input } from '../../components/ui/Input.jsx'
+import { Select } from '../../components/ui/Select.jsx'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Tabs.jsx'
 import { Skeleton } from '../../components/ui/Estados.jsx'
 import { useToast } from '../../components/ui/Toast.jsx'
@@ -42,16 +43,17 @@ function EnviarNotificacao() {
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/10 text-brand"><Send className="h-4 w-4" /></span>
         <div>
           <h2 className="font-semibold text-text">Enviar notificação</h2>
-          <p className="text-xs text-text-muted">Chega no sino de quem recebe (não é o banner do topo).</p>
+          <p className="text-xs text-text-muted">Chega no sino de quem recebe. Líderes enviam para a própria célula; admins, para todos.</p>
         </div>
       </div>
       {opcoes.length > 1 && (
         <div className="mb-3">
-          <label className="mb-1.5 block text-sm font-medium text-text">Para</label>
-          <select value={form.escopo || opcoes[0].v} onChange={(e) => setForm((f) => ({ ...f, escopo: e.target.value }))}
-            className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm text-text focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
-            {opcoes.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
-          </select>
+          <Select
+            label="Para"
+            value={form.escopo || opcoes[0].v}
+            onChange={(v) => setForm((f) => ({ ...f, escopo: v }))}
+            options={opcoes.map((o) => ({ value: o.v, label: o.label }))}
+          />
         </div>
       )}
       <div className="space-y-3">
@@ -102,7 +104,7 @@ export default function AdminAvisos() {
         </span>
         <div>
           <h1 className="font-display text-2xl font-bold text-text">Avisos</h1>
-          <p className="text-sm text-text-muted">Publique um aviso no topo da plataforma para todos.</p>
+          <p className="text-sm text-text-muted">Banner fixo no topo ou notificação no sino.</p>
         </div>
       </div>
 
@@ -116,6 +118,9 @@ export default function AdminAvisos() {
         <Skeleton className="h-48 w-full rounded-2xl" />
       ) : (
         <div className="rounded-2xl border border-border bg-card p-5 ring-1 ring-border">
+          <p className="mb-4 text-xs text-text-muted">
+            Faixa fixa no topo da plataforma, visível a todos. <span className="font-medium text-text">Só administradores</span> publicam o banner.
+          </p>
           <label htmlFor="aviso" className="mb-1.5 block text-sm font-medium text-text">
             Mensagem
           </label>

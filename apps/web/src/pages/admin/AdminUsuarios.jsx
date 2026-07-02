@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ShieldCheck, HelpCircle, Check, X, Users, UserPlus, Search, Power } from 'lucide-react'
+import { ShieldCheck, HelpCircle, Check, X, Users, UserPlus, Search } from 'lucide-react'
 import { Avatar } from '../../components/ui/Avatar.jsx'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Tabs.jsx'
 import { RoleSelect } from '../../components/ui/RoleSelect.jsx'
