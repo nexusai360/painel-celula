@@ -104,7 +104,7 @@ function CardPendente({ u, selecionado, onToggle, onAprovar, onRecusar, ocupado 
   )
 }
 
-function AbaPendentes({ eu }) {
+export function AbaPendentes({ eu }) {
   const toast = useToast()
   const [lista, setLista] = useState(null)
   const [erro, setErro] = useState(false)

@@ -24,7 +24,7 @@ export function linksPorPapel(usuario) {
   ]
   if (papel === 'LIDER') {
     links.push({ to: `/app/celula/${celulaId}`, label: 'Minha Célula', icon: Users2 })
-    links.push({ to: '/app/usuarios', label: 'Aprovações', icon: UserCheck })
+    links.push({ to: '/app/aprovacoes', label: 'Aprovações', icon: UserCheck })
     links.push({ to: '/app/testemunhos', label: 'Testemunhos', icon: Sparkles })
     links.push({ to: '/app/vidas', label: 'Vidas', icon: Heart })
   }

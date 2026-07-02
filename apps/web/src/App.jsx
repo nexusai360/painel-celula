@@ -16,7 +16,7 @@ import Register from './pages/Register.jsx'
 import AppHome from './pages/AppHome.jsx'
 import Calendario from './pages/Calendario.jsx'
 import Celulas from './pages/Celulas.jsx'
-import Usuarios from './pages/Usuarios.jsx'
+import Aprovacoes from './pages/Aprovacoes.jsx'
 import SelecionarCelula from './pages/SelecionarCelula.jsx'
 import Aguardando from './pages/Aguardando.jsx'
 import CelulaDetalhe from './pages/CelulaDetalhe.jsx'
@@ -32,7 +32,7 @@ function InicioOuCelulas() {
   const { usuario } = useAuth()
   // Admin sem célula vai direto para a Administração; admin que participa de uma
   // célula (ou membro/líder) vê a home de participante.
-  if (ehAdmin(usuario?.papel) && !usuario?.celulaId) return <Navigate to="/app/celulas" replace />
+  if (ehAdmin(usuario?.papel) && !usuario?.celulaId) return <Navigate to="/app/admin/usuarios" replace />
   return <AppHome />
 }
 
@@ -88,8 +88,11 @@ export default function App() {
               <Route path="/app/aguardando" element={<Aguardando />} />
               <Route path="/app/calendario" element={<Calendario />} />
               <Route path="/app/perfil" element={<Perfil />} />
-              <Route path="/app/celulas" element={<Celulas />} />
-              <Route path="/app/usuarios" element={<SoGestor><Usuarios /></SoGestor>} />
+              {/* Compat: rotas antigas redirecionam para a área de Administração */}
+              <Route path="/app/celulas" element={<Navigate to="/app/admin/celulas" replace />} />
+              <Route path="/app/usuarios" element={<Navigate to="/app/admin/usuarios" replace />} />
+              {/* Aprovações do líder (própria célula) — rota dedicada */}
+              <Route path="/app/aprovacoes" element={<SoGestor><Aprovacoes /></SoGestor>} />
               {/* Área de Administração (route-group; rail lateral + sub-nav) */}
               <Route path="/app/admin" element={<SoAdmin><AdminLayout /></SoAdmin>}>
                 <Route path="usuarios" element={<AdminUsuarios />} />
