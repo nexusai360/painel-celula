@@ -54,26 +54,22 @@ describe('gerarQrToken', () => {
 })
 
 describe('podeGerenciarCelula', () => {
-  const celula = { id: 'c1', liderId: 'u1' }
+  const celula = { id: 'c1', lideres: [{ id: 'u1' }] }
 
-  it('ADMIN sempre pode, independente do liderId', () => {
-    expect(podeGerenciarCelula({ id: 'qualquer', papel: 'ADMIN' }, celula)).toBe(true)
-    expect(podeGerenciarCelula({ id: 'outro', papel: 'ADMIN' }, { liderId: null })).toBe(true)
+  it('ADMIN+ sempre pode, independente dos líderes', () => {
+    expect(podeGerenciarCelula({ id: 'qualquer', nivelAcesso: 'ADMIN' }, celula)).toBe(true)
+    expect(podeGerenciarCelula({ id: 'outro', nivelAcesso: 'SUPER_ADMIN' }, { lideres: [] })).toBe(true)
   })
 
-  it('LIDER pode se for o líder da célula', () => {
-    expect(podeGerenciarCelula({ id: 'u1', papel: 'LIDER' }, celula)).toBe(true)
+  it('líder pode se estiver entre os líderes da célula', () => {
+    expect(podeGerenciarCelula({ id: 'u1', nivelAcesso: 'USUARIO' }, celula)).toBe(true)
   })
 
-  it('LIDER não pode se não for o líder', () => {
-    expect(podeGerenciarCelula({ id: 'u2', papel: 'LIDER' }, celula)).toBe(false)
+  it('não pode se não for líder da célula', () => {
+    expect(podeGerenciarCelula({ id: 'u2', nivelAcesso: 'USUARIO' }, celula)).toBe(false)
   })
 
-  it('LIDER não pode quando celula.liderId é null', () => {
-    expect(podeGerenciarCelula({ id: 'u1', papel: 'LIDER' }, { liderId: null })).toBe(false)
-  })
-
-  it('MEMBRO nunca pode, mesmo tendo o mesmo id que o lider', () => {
-    expect(podeGerenciarCelula({ id: 'u1', papel: 'MEMBRO' }, celula)).toBe(false)
+  it('não pode quando a célula não tem líderes', () => {
+    expect(podeGerenciarCelula({ id: 'u1', nivelAcesso: 'USUARIO' }, { lideres: [] })).toBe(false)
   })
 })
