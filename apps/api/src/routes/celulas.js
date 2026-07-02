@@ -20,7 +20,7 @@ function isP2002OnField(err, fieldName) {
 // Frequências suportadas: Semanal (7), Quinzenal (14), Mensal (28).
 const FREQUENCIAS_VALIDAS = [7, 14, 28]
 const frequenciaValida = z
-  .number()
+  .coerce.number()
   .int()
   .refine((v) => FREQUENCIAS_VALIDAS.includes(v), 'Frequência inválida')
 
@@ -30,24 +30,43 @@ const enderecoFields = {
   endereco: z.string().optional(),
   numero: z.string().optional(),
   complemento: z.string().optional(),
-  pontoReferencia: z.string().optional()
+  pontoReferencia: z.string().optional(),
+  cep: z.string().regex(/^\d{5}-?\d{3}$/, 'CEP inválido').optional()
 }
 const CAMPOS_ENDERECO = Object.keys(enderecoFields)
 
-const celulaSchema = z.object({
-  nome: z.string().min(1),
-  descricao: z.string().optional(),
-  diaSemana: z.number().int().min(0).max(6),
-  frequenciaDias: frequenciaValida,
-  dataPrimeiroEncontro: z.coerce.date(),
-  liderId: z.string().optional(),
-  ...enderecoFields
-})
+// Wall-clock ingênuo "YYYY-MM-DDTHH:mm" — weekday derivado dos componentes em UTC
+// (TZ-independente; consistente com a data armazenada, também UTC-pinada no handler).
+const DATA_HORA = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
+function weekdayDaString(s) {
+  const [y, mo, d] = s.slice(0, 10).split('-').map(Number)
+  return new Date(Date.UTC(y, mo - 1, d)).getUTCDay()
+}
+export function dataUtcDaString(s) {
+  const [y, mo, d] = s.slice(0, 10).split('-').map(Number)
+  const [hh, mi] = s.slice(11, 16).split(':').map(Number)
+  return new Date(Date.UTC(y, mo - 1, d, hh, mi))
+}
+
+const celulaSchema = z
+  .object({
+    nome: z.string().min(1),
+    descricao: z.string().optional(),
+    diaSemana: z.coerce.number().int().min(0).max(6),
+    frequenciaDias: frequenciaValida,
+    dataPrimeiroEncontro: z.string().regex(DATA_HORA, 'Data/hora inválida'),
+    liderId: z.string().optional(),
+    ...enderecoFields
+  })
+  .refine((d) => d.diaSemana === weekdayDaString(d.dataPrimeiroEncontro), {
+    message: 'O dia da semana não corresponde à data do primeiro encontro',
+    path: ['diaSemana']
+  })
 
 const updateCelulaSchema = z.object({
   nome: z.string().min(1).optional(),
   descricao: z.string().optional(),
-  diaSemana: z.number().int().min(0).max(6).optional(),
+  diaSemana: z.coerce.number().int().min(0).max(6).optional(),
   frequenciaDias: frequenciaValida.optional(),
   dataPrimeiroEncontro: z.coerce.date().optional(),
   ativa: z.boolean().optional(),
@@ -74,7 +93,9 @@ export async function celulaRoutes(app) {
     if (!parsed.success) {
       return reply.code(400).send({ erro: 'Dados inválidos', detalhes: parsed.error.issues })
     }
-    const { nome, descricao, diaSemana, frequenciaDias, dataPrimeiroEncontro, liderId } = parsed.data
+    const { nome, descricao, diaSemana, frequenciaDias, liderId } = parsed.data
+    // Data armazenada UTC-pinada a partir do wall-clock digitado (preserva o dia/hora).
+    const dataPrimeiroEncontro = dataUtcDaString(parsed.data.dataPrimeiroEncontro)
     const endereco = Object.fromEntries(
       CAMPOS_ENDERECO.filter((k) => parsed.data[k] !== undefined).map((k) => [k, parsed.data[k]])
     )

@@ -5,10 +5,13 @@ import { Card } from '../components/ui/Card.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Input } from '../components/ui/Input.jsx'
 import { Select } from '../components/ui/Select.jsx'
+import { Combobox } from '../components/ui/Combobox.jsx'
+import { Checkbox } from '../components/ui/Checkbox.jsx'
 import { DateTimePicker } from '../components/ui/DateTimePicker.jsx'
 import { Tag } from '../components/ui/Tag.jsx'
 import { Spinner } from '../components/ui/Spinner.jsx'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog.jsx'
+import { useToast } from '../components/ui/Toast.jsx'
 import {
   apiListarCelulas,
   apiCriarCelula,
@@ -17,6 +20,9 @@ import {
   apiListarUsuarios
 } from '../lib/api.js'
 import { nomeDiaSemana } from '../lib/datas.js'
+import { montarPayloadCelula } from '../lib/celulaPayload.js'
+import { mascaraCep } from '../lib/mascaras.js'
+import { CIDADES } from '../lib/cidades.js'
 
 const DIAS = [0, 1, 2, 3, 4, 5, 6]
 const FREQUENCIAS = [
@@ -31,10 +37,12 @@ function NovaCelula({ onCriada }) {
   const [aberto, setAberto] = useState(false)
   const [form, setForm] = useState({
     nome: '', descricao: '', diaSemana: 4, frequenciaDias: 7, dataPrimeiroEncontro: '',
-    cidade: '', bairro: '', endereco: '', numero: '', complemento: '', pontoReferencia: ''
+    cidade: '', bairro: '', endereco: '', numero: '', complemento: '', pontoReferencia: '',
+    cep: '', semNumero: false
   })
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
+  const toast = useToast()
   const set = (c, v) => setForm((f) => ({ ...f, [c]: v }))
 
   async function criar(e) {
@@ -42,25 +50,14 @@ function NovaCelula({ onCriada }) {
     setSalvando(true)
     setErro('')
     try {
-      await apiCriarCelula({
-        nome: form.nome,
-        descricao: form.descricao || undefined,
-        diaSemana: Number(form.diaSemana),
-        frequenciaDias: Number(form.frequenciaDias),
-        dataPrimeiroEncontro: new Date(form.dataPrimeiroEncontro).toISOString(),
-        cidade: form.cidade || undefined,
-        bairro: form.bairro || undefined,
-        endereco: form.endereco || undefined,
-        numero: form.numero || undefined,
-        complemento: form.complemento || undefined,
-        pontoReferencia: form.pontoReferencia || undefined
-      })
+      await apiCriarCelula(montarPayloadCelula(form))
       setForm({
         nome: '', descricao: '', diaSemana: 4, frequenciaDias: 7, dataPrimeiroEncontro: '',
         cidade: '', bairro: '', endereco: '', numero: '', complemento: '', pontoReferencia: ''
       })
       setAberto(false)
       onCriada()
+      toast.sucesso('Célula criada.')
     } catch (e2) {
       setErro(e2?.response?.data?.erro || 'Erro ao criar célula.')
     } finally {
@@ -78,47 +75,54 @@ function NovaCelula({ onCriada }) {
 
   return (
     <Card>
-      <h2 className="font-semibold text-text">Nova célula</h2>
-      <form className="mt-4 space-y-4" onSubmit={criar}>
-        <Input id="nome" label="Nome" value={form.nome} onChange={(e) => set('nome', e.target.value)} required />
-        <Input id="descricao" label="Descrição (opcional)" value={form.descricao} onChange={(e) => set('descricao', e.target.value)} />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select
-            label="Dia da semana"
-            options={OPCOES_DIA}
-            value={form.diaSemana}
-            onChange={(v) => set('diaSemana', v)}
-          />
-          <Select
-            label="Frequência"
-            options={OPCOES_FREQ}
-            value={form.frequenciaDias}
-            onChange={(v) => set('frequenciaDias', v)}
-          />
+      <h2 className="font-display text-lg font-bold text-text">Nova célula</h2>
+      <form className="mt-5 space-y-6" onSubmit={criar}>
+        {/* Identificação */}
+        <div className="space-y-4">
+          <Input id="nome" label="Nome" placeholder="Ex.: Célula Esperança" value={form.nome} onChange={(e) => set('nome', e.target.value)} required />
+          <Input id="descricao" label="Descrição (opcional)" placeholder="Ex.: Jovens do bairro, foco em discipulado" value={form.descricao} onChange={(e) => set('descricao', e.target.value)} />
         </div>
-        <DateTimePicker
-          label="Primeiro encontro"
-          value={form.dataPrimeiroEncontro}
-          onChange={(v) => set('dataPrimeiroEncontro', v)}
-          required
-        />
 
-        <div className="border-t border-border pt-4">
-          <p className="mb-3 text-sm font-semibold text-text">Endereço da célula</p>
+        {/* Encontro */}
+        <div className="space-y-4 border-t border-border pt-5">
+          <p className="text-sm font-semibold text-text">Encontro</p>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input id="cidade" label="Cidade" value={form.cidade} onChange={(e) => set('cidade', e.target.value)} />
-            <Input id="bairro" label="Bairro" value={form.bairro} onChange={(e) => set('bairro', e.target.value)} />
+            <Select label="Dia da semana" options={OPCOES_DIA} value={form.diaSemana} onChange={(v) => set('diaSemana', v)} />
+            <Select label="Frequência" options={OPCOES_FREQ} value={form.frequenciaDias} onChange={(v) => set('frequenciaDias', v)} />
           </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <DateTimePicker
+            label="Data e horário do primeiro encontro"
+            value={form.dataPrimeiroEncontro}
+            onChange={(v) => set('dataPrimeiroEncontro', v)}
+            required
+          />
+          <p className="text-xs text-text-muted">O dia da semana precisa combinar com a data escolhida.</p>
+        </div>
+
+        {/* Endereço */}
+        <div className="space-y-4 border-t border-border pt-5">
+          <p className="text-sm font-semibold text-text">Endereço da célula</p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Input id="cep" label="CEP" placeholder="00000-000" inputMode="numeric" value={form.cep} onChange={(e) => set('cep', mascaraCep(e.target.value))} />
             <div className="sm:col-span-2">
-              <Input id="endereco" label="Endereço" value={form.endereco} onChange={(e) => set('endereco', e.target.value)} />
+              <label className="mb-1.5 block text-sm font-medium text-text">Cidade</label>
+              <Combobox value={form.cidade} onChange={(v) => set('cidade', v)} options={CIDADES} placeholder="Comece a digitar…" allowCustom aria-label="Cidade" />
             </div>
-            <Input id="numero" label="Número" value={form.numero} onChange={(e) => set('numero', e.target.value)} />
           </div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Input id="complemento" label="Complemento (opcional)" value={form.complemento} onChange={(e) => set('complemento', e.target.value)} />
-            <Input id="pontoReferencia" label="Ponto de referência (opcional)" value={form.pontoReferencia} onChange={(e) => set('pontoReferencia', e.target.value)} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input id="bairro" label="Bairro" placeholder="Ex.: Centro" value={form.bairro} onChange={(e) => set('bairro', e.target.value)} />
+            <Input id="endereco" label="Rua / Endereço" placeholder="Ex.: Rua 7" value={form.endereco} onChange={(e) => set('endereco', e.target.value)} />
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Input id="numero" label="Número" placeholder="Ex.: 123" value={form.semNumero ? 'S/N' : form.numero} disabled={form.semNumero} onChange={(e) => set('numero', e.target.value)} />
+              <div className="mt-2">
+                <Checkbox id="semNumero" label="Sem número" checked={form.semNumero} onChange={(v) => set('semNumero', v)} />
+              </div>
+            </div>
+            <Input id="complemento" label="Complemento (opcional)" placeholder="Ex.: Fundos, ap. 2" value={form.complemento} onChange={(e) => set('complemento', e.target.value)} />
+          </div>
+          <Input id="pontoReferencia" label="Ponto de referência (opcional)" placeholder="Ex.: Próximo à praça" value={form.pontoReferencia} onChange={(e) => set('pontoReferencia', e.target.value)} />
         </div>
 
         {erro && <p role="alert" className="text-sm text-danger">{erro}</p>}
