@@ -196,3 +196,12 @@ npm run deploy:status                           # imagem/versão do serviço + h
 - **Feature nova quebra por coluna faltando:** confirme que a migration foi
   **commitada** em `apps/api/prisma/migrations/`; o `migrate deploy` do boot só
   aplica arquivos de migration.
+- **Deploy "não pega" a imagem nova (roda a antiga):** o Swarm **fixa o digest**
+  da imagem no spec; um `ForceUpdate` sozinho reinicia com o MESMO digest. Por
+  isso o `npm run deploy` **resolve o digest atual da `:latest` no GHCR e aponta
+  o serviço para ele** (é o que o Shepherd faz). Se editar o deploy à mão, sempre
+  fixe `repo@sha256:<novo-digest>`, não só a tag `:latest`.
+- **Verificação logo após o deploy mostra estado antigo:** durante o rolling
+  update coexistem o container velho (draining) e o novo. Espere a convergência
+  (`npm run deploy` já aguarda) e valide o container cujo `Image` casa com o
+  digest novo.

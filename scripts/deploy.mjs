@@ -46,13 +46,37 @@ function lerEnvDeploy() {
 
 function sair(msg) { console.error('[deploy] ERRO:', msg); process.exit(1) }
 
-function pullAuthGHCR() {
+const IMAGE_REPO = 'ghcr.io/nexusai360/painel-celula'
+
+function ghToken() {
+  try { return execSync('gh auth token', { encoding: 'utf8' }).trim() } catch { return null }
+}
+
+function pullAuthGHCR(token) {
   // A imagem é privada (org nexusai360). Passamos X-Registry-Auth para o pull.
-  try {
-    const token = execSync('gh auth token', { encoding: 'utf8' }).trim()
-    return Buffer.from(JSON.stringify({ username: 'jvzanini', password: token, serveraddress: 'ghcr.io' })).toString('base64')
-  } catch {
+  if (!token) {
     console.warn('[deploy] aviso: `gh auth token` falhou; seguindo sem X-Registry-Auth (usa a credencial do nó).')
+    return null
+  }
+  return Buffer.from(JSON.stringify({ username: 'jvzanini', password: token, serveraddress: 'ghcr.io' })).toString('base64')
+}
+
+/**
+ * Resolve o digest atual da :latest no GHCR. O Swarm FIXA o digest no spec, então
+ * um ForceUpdate sozinho não puxa a imagem nova — é preciso apontar o serviço para
+ * o digest novo (é o que o Shepherd faz). Retorna `repo@sha256:...` ou null.
+ */
+async function resolverImagemNova(token) {
+  if (!token) return null
+  try {
+    const b = Buffer.from('jvzanini:' + token).toString('base64')
+    const tr = await fetch(`https://ghcr.io/token?scope=repository:nexusai360/painel-celula:pull&service=ghcr.io`, { headers: { Authorization: 'Basic ' + b } })
+    const jt = (await tr.json()).token
+    const accept = 'application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json'
+    const m = await fetch(`https://ghcr.io/v2/nexusai360/painel-celula/manifests/latest`, { method: 'HEAD', headers: { Authorization: 'Bearer ' + jt, Accept: accept } })
+    const digest = m.headers.get('docker-content-digest')
+    return digest ? `${IMAGE_REPO}@${digest}` : null
+  } catch {
     return null
   }
 }
@@ -74,10 +98,20 @@ async function main() {
     return
   }
 
-  console.log(`[deploy] forçando redeploy de ${SERVICO} (re-pull da :latest)...`)
+  console.log(`[deploy] resolvendo o digest atual da :latest no GHCR...`)
+  const token = ghToken()
+  const auth = pullAuthGHCR(token)
+  const imagemNova = await resolverImagemNova(token)
   const spec = app.Spec
   spec.TaskTemplate.ForceUpdate = (spec.TaskTemplate.ForceUpdate || 0) + 1
-  const auth = pullAuthGHCR()
+  if (imagemNova) {
+    console.log(`[deploy] apontando serviço para ${imagemNova.slice(0, 60)}...`)
+    spec.TaskTemplate.ContainerSpec.Image = imagemNova
+  } else {
+    // Fallback: usa a tag (Swarm re-resolve com a auth); menos garantido que o digest.
+    console.warn('[deploy] não resolvi o digest; usando a tag :latest (pode não puxar a nova).')
+    spec.TaskTemplate.ContainerSpec.Image = `${IMAGE_REPO}:latest`
+  }
   const res = await api(`/api/endpoints/${EP}/docker/services/${app.ID}/update?version=${app.Version.Index}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(auth ? { 'X-Registry-Auth': auth } : {}) },
