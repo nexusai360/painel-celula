@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useOverlayDismiss } from '../../hooks/useOverlayDismiss.js'
 
 const DRAG_DISMISS_THRESHOLD = 80 // px puxado para baixo para fechar
 
@@ -10,68 +11,10 @@ function usePrefersReducedMotion() {
 
 export function Sheet({ open, onClose, tituloId, children }) {
   const sheetRef = useRef(null)
-  const previousFocusRef = useRef(null)
   const reducedMotion = usePrefersReducedMotion()
 
-  // Scroll-lock + restaura ao fechar
-  useEffect(() => {
-    if (open) {
-      previousFocusRef.current = document.activeElement
-      document.body.style.overflow = 'hidden'
-      // Foca o sheet assim que montar
-      requestAnimationFrame(() => {
-        sheetRef.current?.focus()
-      })
-    } else {
-      document.body.style.overflow = ''
-      // Restaura foco ao elemento que o tinha antes
-      if (previousFocusRef.current) {
-        previousFocusRef.current.focus?.()
-        previousFocusRef.current = null
-      }
-    }
-    return () => {
-      document.body.style.overflow = ''
-    }
-  }, [open])
-
-  // Fecha no Esc + trap de foco Tab/Shift+Tab dentro do painel
-  useEffect(() => {
-    if (!open) return
-    function onKeyDown(e) {
-      if (e.key === 'Escape') {
-        onClose?.()
-        return
-      }
-      if (e.key === 'Tab') {
-        const panel = sheetRef.current
-        if (!panel) return
-        const selector =
-          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
-        const focusable = Array.from(panel.querySelectorAll(selector))
-        if (focusable.length === 0) {
-          e.preventDefault()
-          return
-        }
-        const first = focusable[0]
-        const last = focusable[focusable.length - 1]
-        const active = document.activeElement
-        if (e.shiftKey) {
-          if (active === first || active === panel) {
-            e.preventDefault()
-            last.focus()
-          }
-        } else {
-          if (active === last || active === panel) {
-            e.preventDefault()
-            first.focus()
-          }
-        }
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
+  // Scroll-lock + focus-trap + Esc + restauração de foco (base compartilhada com Modal)
+  useOverlayDismiss(open, onClose, sheetRef)
 
   // Variantes de animação — sem slide quando reduced-motion
   const sheetVariants = reducedMotion
