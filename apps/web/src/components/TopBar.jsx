@@ -37,7 +37,7 @@ export function TopBar() {
   const navigate = useNavigate()
   const [drawerAberto, setDrawerAberto] = useState(false)
 
-  const podeAdmin = ehAdmin(usuario?.papel)
+  const podeAdmin = ehAdmin(usuario?.nivelAcesso)
   // Perfil é neutro (acessado pelo menu do avatar) — não acende nenhum contexto.
   const contexto = pathname.startsWith('/app/admin')
     ? 'admin'

@@ -4,7 +4,7 @@ import { AuthProvider } from './context/AuthContext.jsx'
 import { ConfigProvider } from './context/ConfigContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 import { ProtectedRoute } from './routes/ProtectedRoute.jsx'
-import { ehAdmin, PAPEL_RANK } from './lib/papeis.js'
+import { ehAdmin, ehGestorQualificacao } from './lib/papeis.js'
 import { AppLayout } from './components/AppLayout.jsx'
 import { ToastProvider } from './components/ui/Toast.jsx'
 import { AdminLayout } from './pages/admin/AdminLayout.jsx'
@@ -32,23 +32,26 @@ function InicioOuCelulas() {
   const { usuario } = useAuth()
   // Admin sem célula vai direto para a Administração; admin que participa de uma
   // célula (ou membro/líder) vê a home de participante.
-  if (ehAdmin(usuario?.papel) && !usuario?.celulaId) return <Navigate to="/app/admin/usuarios" replace />
+  if (ehAdmin(usuario?.nivelAcesso) && !usuario?.celulaId) return <Navigate to="/app/admin/usuarios" replace />
   return <AppHome />
 }
 
+// Gestor de célula = qualificação LÍDER/PASTOR (função na igreja).
 function SoLider({ children }) {
   const { usuario } = useAuth()
-  return usuario?.papel === 'LIDER' ? children : <Navigate to="/app" replace />
+  return ehGestorQualificacao(usuario?.qualificacao) ? children : <Navigate to="/app" replace />
 }
 
 function SoAdmin({ children }) {
   const { usuario } = useAuth()
-  return ehAdmin(usuario?.papel) ? children : <Navigate to="/app" replace />
+  return ehAdmin(usuario?.nivelAcesso) ? children : <Navigate to="/app" replace />
 }
 
+// Gestão (aprovar, notificar) = nível ADMIN+ OU qualificação LÍDER/PASTOR.
 function SoGestor({ children }) {
   const { usuario } = useAuth()
-  return (PAPEL_RANK[usuario?.papel] || 0) >= PAPEL_RANK.LIDER ? children : <Navigate to="/app" replace />
+  const ok = ehAdmin(usuario?.nivelAcesso) || ehGestorQualificacao(usuario?.qualificacao)
+  return ok ? children : <Navigate to="/app" replace />
 }
 
 // Trava do usuário pendente: só acessa seleção de célula, "aguardando" e o perfil.

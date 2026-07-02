@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { apiAtualizarPerfil } from '../lib/api.js'
 import { formatarWhatsapp } from '../lib/whatsapp.js'
 import { mapearErroCampos } from '../lib/erros.js'
-import { ROTULO_PAPEL } from '../lib/papeis.js'
+import { ehAdmin } from '../lib/papeis.js'
 import { ehCasadoInicial, mapBackEstadoCivil } from '../lib/estadoCivil.js'
 import { AvatarUpload } from '../components/AvatarUpload.jsx'
 import { ConjugeSecao } from '../components/ConjugeSecao.jsx'
@@ -13,7 +13,7 @@ import { Input } from '../components/ui/Input.jsx'
 import { Button } from '../components/ui/Button.jsx'
 import { Checkbox } from '../components/ui/Checkbox.jsx'
 import { DateTimePicker } from '../components/ui/DateTimePicker.jsx'
-import { RoleBadge } from '../components/ui/RoleBadge.jsx'
+import { NivelBadge, QualificacaoBadge } from '../components/ui/RoleBadge.jsx'
 import { Card } from '../components/ui/Card.jsx'
 
 export default function Perfil() {
@@ -77,7 +77,6 @@ export default function Perfil() {
     }
   }
 
-  const papelLabel = ROTULO_PAPEL[usuario?.papel] ?? usuario?.papel ?? ''
 
   return (
     <div className="px-4 pt-6">
@@ -92,8 +91,9 @@ export default function Perfil() {
             <div className="min-w-0 flex-1 text-center sm:text-left">
               <h1 className="font-display text-xl font-bold text-text">{usuario?.nome}</h1>
               <p className="truncate text-sm text-text-muted">{usuario?.email}</p>
-              <div className="mt-2 flex justify-center sm:justify-start">
-                <RoleBadge papel={usuario?.papel} />
+              <div className="mt-2 flex items-center justify-center gap-1.5 sm:justify-start">
+                {ehAdmin(usuario?.nivelAcesso) && <NivelBadge nivel={usuario.nivelAcesso} soIcone />}
+                <QualificacaoBadge qualificacao={usuario?.qualificacao} />
               </div>
             </div>
           </div>

@@ -298,7 +298,7 @@ export default function CelulaDetalhe() {
     return <Spinner className="py-16" />
 
   const aba = params.get('tab') === 'membros' ? 'membros' : 'informacoes'
-  const ehAdmin = usuario?.papel === 'ADMIN'
+  const ehAdmin = usuario?.nivelAcesso === 'ADMIN' || usuario?.nivelAcesso === 'SUPER_ADMIN'
 
   return (
     <>

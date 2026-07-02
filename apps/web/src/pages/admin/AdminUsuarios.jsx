@@ -1,28 +1,34 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ShieldCheck, HelpCircle, Check, X, Users, UserPlus, Search } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ShieldCheck, HelpCircle, Check, X, Users, UserPlus, Search, Pencil } from 'lucide-react'
 import { Avatar } from '../../components/ui/Avatar.jsx'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Tabs.jsx'
-import { RoleSelect } from '../../components/ui/RoleSelect.jsx'
-import { RoleBadge, StatusBadge } from '../../components/ui/RoleBadge.jsx'
+import { QualificacaoSelect, NivelSelect } from '../../components/ui/RoleSelect.jsx'
+import { QualificacaoBadge, NivelBadge, StatusBadge } from '../../components/ui/RoleBadge.jsx'
 import { Checkbox } from '../../components/ui/Checkbox.jsx'
 import { Popover } from '../../components/ui/Popover.jsx'
+import { Modal } from '../../components/ui/Modal.jsx'
+import { Input } from '../../components/ui/Input.jsx'
+import { Button } from '../../components/ui/Button.jsx'
 import { SkeletonLinhas, EmptyState, ErrorState } from '../../components/ui/Estados.jsx'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog.jsx'
 import { useToast } from '../../components/ui/Toast.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
 import {
-  CORES_PAPEL, CORES_STATUS, opcoesDePapel, podeAgirSobre, statusDeUsuario, ROTULO_PAPEL,
+  CORES_STATUS, ROTULO_QUALIFICACAO, TODAS_QUALIFICACOES, opcoesDeQualificacao,
+  opcoesDeNivel, ehAdmin, statusDeUsuario,
 } from '../../lib/papeis.js'
 import {
-  apiUsuariosPendentes, apiAprovarUsuario, apiRecusarUsuario,
-  apiListarUsuarios, apiAtualizarPapel, apiAtualizarUsuarioAtivo,
+  apiUsuariosPendentes, apiAprovarUsuario, apiRecusarUsuario, apiListarUsuarios,
+  apiAtualizarQualificacao, apiAtualizarNivel, apiAtualizarUsuario, apiAtualizarUsuarioAtivo,
 } from '../../lib/api.js'
 
-const LEGENDA = [
-  { papel: 'MEMBRO', desc: 'Participante de uma célula.' },
-  { papel: 'LIDER', desc: 'Lidera uma célula e aprova membros dela.' },
-  { papel: 'ADMIN', desc: 'Faz tudo na plataforma, abaixo do Super Admin.' },
-  { papel: 'SUPER_ADMIN', desc: 'Dono. Único que concede Super Admin.' },
+const LEGENDA_QUALIF = [
+  { q: 'CONVIDADO', desc: 'Visitante que ainda não é membro.' },
+  { q: 'MEMBRO', desc: 'Participante de uma célula.' },
+  { q: 'LOUVOR', desc: 'Serve no ministério de louvor.' },
+  { q: 'COLIDER', desc: 'Auxilia a liderança de uma célula.' },
+  { q: 'LIDER', desc: 'Lidera uma célula e aprova seus membros.' },
+  { q: 'PASTOR', desc: 'Pastoreia; qualificação mais alta.' },
 ]
 
 function formatarData(iso) {
@@ -40,7 +46,7 @@ function Cabecalho() {
         </span>
         <div>
           <h1 className="font-display text-2xl font-bold text-text">Usuários</h1>
-          <p className="text-sm text-text-muted">Aprove solicitações e gerencie os níveis de acesso.</p>
+          <p className="text-sm text-text-muted">Aprove solicitações e gerencie qualificações e acessos.</p>
         </div>
       </div>
       <Popover
@@ -51,17 +57,17 @@ function Cabecalho() {
           <button
             type="button"
             onClick={() => setLegenda((o) => !o)}
-            aria-label="O que são os níveis de acesso"
+            aria-label="O que são as qualificações"
             className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm text-text-muted transition-colors hover:text-text cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           >
-            <HelpCircle className="h-4 w-4" /> Níveis
+            <HelpCircle className="h-4 w-4" /> Qualificações
           </button>
         }
       >
         <div className="w-[22rem] space-y-3.5 p-2.5">
-          {LEGENDA.map((n) => (
-            <div key={n.papel} className="grid grid-cols-[8.5rem_1fr] items-start gap-3">
-              <RoleBadge papel={n.papel} className="mt-0.5 justify-self-start whitespace-nowrap" />
+          {LEGENDA_QUALIF.map((n) => (
+            <div key={n.q} className="grid grid-cols-[7rem_1fr] items-start gap-3">
+              <QualificacaoBadge qualificacao={n.q} className="mt-0.5 justify-self-start whitespace-nowrap" />
               <span className="text-xs leading-relaxed text-text-muted">{n.desc}</span>
             </div>
           ))}
@@ -71,7 +77,9 @@ function Cabecalho() {
   )
 }
 
+// ── Aprovação (Pendentes) ────────────────────────────────────────────────────
 function CardPendente({ u, selecionado, onToggle, onAprovar, onRecusar, ocupado }) {
+  const [qualif, setQualif] = useState('MEMBRO')
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4 ring-1 ring-transparent transition hover:ring-border">
       <Checkbox id={`sel-${u.id}`} checked={selecionado} onChange={() => onToggle(u.id)} />
@@ -79,11 +87,10 @@ function CardPendente({ u, selecionado, onToggle, onAprovar, onRecusar, ocupado 
       <div className="min-w-0 flex-1">
         <p className="truncate font-semibold text-text">{u.nome}</p>
         <p className="truncate text-sm text-text-muted">{u.email}</p>
-        {u.celulaNome && <p className="truncate text-xs text-brand">Célula pretendida: {u.celulaNome}</p>}
       </div>
-      <StatusBadge status="PENDENTE" />
       <span className="hidden text-xs text-text-muted sm:block">{formatarData(u.criadoEm)}</span>
       <div className="flex shrink-0 items-center gap-2">
+        <QualificacaoSelect value={qualif} opcoes={TODAS_QUALIFICACOES} onChange={setQualif} />
         <button
           onClick={() => onRecusar(u)}
           disabled={ocupado}
@@ -93,7 +100,7 @@ function CardPendente({ u, selecionado, onToggle, onAprovar, onRecusar, ocupado 
           <X className="h-4 w-4" />
         </button>
         <button
-          onClick={() => onAprovar(u.id)}
+          onClick={() => onAprovar(u.id, qualif)}
           disabled={ocupado}
           className="brand-grad inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand px-3.5 text-sm font-semibold text-on-brand shadow-sm transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
@@ -119,16 +126,12 @@ export function AbaPendentes({ eu }) {
   useEffect(() => { carregar() }, [])
 
   function toggle(id) {
-    setSel((s) => {
-      const n = new Set(s)
-      n.has(id) ? n.delete(id) : n.add(id)
-      return n
-    })
+    setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
-  async function aprovar(id) {
+  async function aprovar(id, qualificacao) {
     setOcupado(true)
     try {
-      await apiAprovarUsuario(id)
+      await apiAprovarUsuario(id, qualificacao)
       setLista((l) => l.filter((u) => u.id !== id))
       setSel((s) => { const n = new Set(s); n.delete(id); return n })
       toast.sucesso('Usuário aprovado.')
@@ -138,12 +141,12 @@ export function AbaPendentes({ eu }) {
   async function aprovarSelecionados() {
     setOcupado(true)
     const ids = [...sel]
-    const res = await Promise.allSettled(ids.map((id) => apiAprovarUsuario(id)))
+    const res = await Promise.allSettled(ids.map((id) => apiAprovarUsuario(id, 'MEMBRO')))
     const ok = res.filter((r) => r.status === 'fulfilled').length
     setLista((l) => l.filter((u) => !ids.includes(u.id) || res[ids.indexOf(u.id)]?.status !== 'fulfilled'))
     setSel(new Set())
     setOcupado(false)
-    if (ok) toast.sucesso(`${ok} usuário(s) aprovado(s).`)
+    if (ok) toast.sucesso(`${ok} usuário(s) aprovado(s) como Membro.`)
     if (ok < ids.length) toast.erro(`${ids.length - ok} não puderam ser aprovados.`)
   }
   async function confirmarRecusa() {
@@ -162,8 +165,16 @@ export function AbaPendentes({ eu }) {
   if (lista.length === 0) {
     return <EmptyState icon={UserPlus} titulo="Tudo em dia" subtitulo="Nenhuma aprovação pendente no momento." />
   }
+
+  // Agrupa por célula pretendida (líder N:N vê seções por célula).
+  const grupos = {}
+  for (const u of lista) {
+    const chave = u.celulaNome || 'Sem célula'
+    ;(grupos[chave] ||= []).push(u)
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       {sel.size > 0 && (
         <div className="flex items-center justify-between gap-3 rounded-xl bg-surface px-4 py-2.5">
           <span className="text-sm text-text-muted">{sel.size} selecionado(s)</span>
@@ -172,20 +183,25 @@ export function AbaPendentes({ eu }) {
             disabled={ocupado}
             className="brand-grad inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-sm font-semibold text-on-brand shadow-sm disabled:opacity-50 cursor-pointer"
           >
-            <Check className="h-4 w-4" /> Aprovar selecionados
+            <Check className="h-4 w-4" /> Aprovar selecionados (Membro)
           </button>
         </div>
       )}
-      {lista.map((u) => (
-        <CardPendente
-          key={u.id} u={u} selecionado={sel.has(u.id)} onToggle={toggle}
-          onAprovar={aprovar} onRecusar={setARecusar} ocupado={ocupado}
-        />
+      {Object.entries(grupos).map(([celula, us]) => (
+        <div key={celula} className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">{celula} · {us.length}</p>
+          {us.map((u) => (
+            <CardPendente
+              key={u.id} u={u} selecionado={sel.has(u.id)} onToggle={toggle}
+              onAprovar={aprovar} onRecusar={setARecusar} ocupado={ocupado}
+            />
+          ))}
+        </div>
       ))}
       <ConfirmDialog
         open={!!aRecusar}
         titulo="Recusar solicitação"
-        mensagem={`Recusar ${aRecusar?.nome}? Esta ação é irreversível — a solicitação será removida.`}
+        mensagem={`Recusar ${aRecusar?.nome}? A solicitação some da lista de pendentes.`}
         confirmarLabel="Recusar"
         carregando={ocupado}
         onConfirmar={confirmarRecusa}
@@ -195,6 +211,7 @@ export function AbaPendentes({ eu }) {
   )
 }
 
+// ── Status (1 ícone que expande no hover e age no clique) ────────────────────
 const HINT_STATUS = {
   PENDENTE: 'clique para aprovar',
   ATIVO: 'clique para inativar',
@@ -202,7 +219,6 @@ const HINT_STATUS = {
   REPROVADO: 'clique para reativar',
 }
 
-// Status = 1 ícone que, no hover, expande mostrando a tag + a ação. Clique executa.
 function StatusControl({ status, onClick, ocupado }) {
   const c = CORES_STATUS[status]
   const Ic = c.icon
@@ -223,12 +239,69 @@ function StatusControl({ status, onClick, ocupado }) {
   )
 }
 
+// ── Modal de edição de usuário ───────────────────────────────────────────────
+function EditarUsuarioModal({ u, eu, onFechar, onSalvo }) {
+  const toast = useToast()
+  const [nome, setNome] = useState(u.nome)
+  const [whatsapp, setWhatsapp] = useState(u.whatsapp || '')
+  const [ativo, setAtivo] = useState(u.ativo)
+  const [nivel, setNivel] = useState(u.nivelAcesso)
+  const [qualif, setQualif] = useState(u.qualificacao)
+  const [salvando, setSalvando] = useState(false)
+
+  const opcoesNivel = opcoesDeNivel(eu.nivelAcesso, u.nivelAcesso)
+  const opcoesQualif = opcoesDeQualificacao(eu.nivelAcesso, eu.qualificacao)
+
+  async function salvar() {
+    setSalvando(true)
+    try {
+      let atual = u
+      if (nome !== u.nome || whatsapp !== (u.whatsapp || '') || ativo !== u.ativo) {
+        atual = await apiAtualizarUsuario(u.id, { nome, whatsapp: whatsapp || null, ativo })
+      }
+      if (nivel !== u.nivelAcesso) atual = await apiAtualizarNivel(u.id, nivel)
+      if (qualif !== u.qualificacao) atual = await apiAtualizarQualificacao(u.id, qualif)
+      onSalvo({ ...u, ...atual, nome, whatsapp, ativo, nivelAcesso: nivel, qualificacao: qualif })
+      toast.sucesso('Usuário atualizado.')
+      onFechar()
+    } catch (e) {
+      toast.erro(e?.response?.data?.erro || 'Não foi possível salvar.')
+    } finally { setSalvando(false) }
+  }
+
+  return (
+    <Modal open onClose={onFechar} titulo={`Editar ${u.nome}`} size="md">
+      <div className="space-y-4 p-5">
+        <Input id="edit-nome" label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} />
+        <Input id="edit-wpp" label="WhatsApp" value={whatsapp} placeholder="(62) 99999-9999" onChange={(e) => setWhatsapp(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-text">Qualificação</label>
+            <QualificacaoSelect value={qualif} opcoes={opcoesQualif.length ? opcoesQualif : [qualif]} onChange={setQualif} readOnly={opcoesQualif.length <= 1} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-text">Nível de acesso</label>
+            <NivelSelect value={nivel} opcoes={opcoesNivel} onChange={setNivel} readOnly={opcoesNivel.length <= 1 || u.id === eu.id} />
+          </div>
+        </div>
+        <Checkbox id="edit-ativo" label="Conta ativa" checked={ativo} onChange={setAtivo} />
+      </div>
+      <div className="flex justify-end gap-2 border-t border-border px-5 py-3.5">
+        <button type="button" onClick={onFechar} className="rounded-lg px-4 py-2 text-sm font-medium text-text-muted hover:bg-surface hover:text-text cursor-pointer">Cancelar</button>
+        <Button onClick={salvar} loading={salvando} className="w-auto px-6">Salvar</Button>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Todos ─────────────────────────────────────────────────────────────────────
 function AbaTodos({ eu }) {
   const toast = useToast()
   const [lista, setLista] = useState(null)
   const [erro, setErro] = useState(false)
   const [busca, setBusca] = useState('')
   const [ocupado, setOcupado] = useState(null)
+  const [editando, setEditando] = useState(null)
 
   async function carregar(q = '') {
     setErro(false)
@@ -241,13 +314,13 @@ function AbaTodos({ eu }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busca])
 
-  async function trocarPapel(u, papel) {
+  async function trocarQualificacao(u, qualificacao) {
     setOcupado(u.id)
     try {
-      const r = await apiAtualizarPapel(u.id, papel)
-      setLista((l) => l.map((x) => (x.id === u.id ? { ...x, papel: r.papel } : x)))
-      toast.sucesso(`Nível alterado para ${ROTULO_PAPEL[papel]}.`)
-    } catch (e) { toast.erro(e?.response?.data?.erro || 'Não foi possível alterar o nível.') }
+      const r = await apiAtualizarQualificacao(u.id, qualificacao)
+      setLista((l) => l.map((x) => (x.id === u.id ? { ...x, qualificacao: r.qualificacao } : x)))
+      toast.sucesso(`Qualificação alterada para ${ROTULO_QUALIFICACAO[qualificacao]}.`)
+    } catch (e) { toast.erro(e?.response?.data?.erro || 'Não foi possível alterar.') }
     finally { setOcupado(null) }
   }
   async function acaoStatus(u) {
@@ -255,13 +328,13 @@ function AbaTodos({ eu }) {
     setOcupado(u.id)
     try {
       if (st === 'PENDENTE') {
-        await apiAprovarUsuario(u.id)
+        await apiAprovarUsuario(u.id, u.qualificacao || 'MEMBRO')
         setLista((l) => l.map((x) => (x.id === u.id ? { ...x, aprovado: true, ativo: true } : x)))
         toast.sucesso('Usuário aprovado.')
       } else if (st === 'REPROVADO') {
-        await apiAprovarUsuario(u.id)
+        await apiAprovarUsuario(u.id, 'MEMBRO')
         await apiAtualizarUsuarioAtivo(u.id, true)
-        setLista((l) => l.map((x) => (x.id === u.id ? { ...x, aprovado: true, ativo: true, papel: 'MEMBRO' } : x)))
+        setLista((l) => l.map((x) => (x.id === u.id ? { ...x, aprovado: true, ativo: true, qualificacao: 'MEMBRO' } : x)))
         toast.sucesso('Usuário reativado como membro.')
       } else {
         const r = await apiAtualizarUsuarioAtivo(u.id, !u.ativo)
@@ -271,6 +344,8 @@ function AbaTodos({ eu }) {
     } catch (e) { toast.erro(e?.response?.data?.erro || 'Não foi possível alterar o status.') }
     finally { setOcupado(null) }
   }
+
+  const opcoesQualif = opcoesDeQualificacao(eu?.nivelAcesso, eu?.qualificacao)
 
   return (
     <div className="space-y-4">
@@ -293,9 +368,11 @@ function AbaTodos({ eu }) {
       ) : (
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           {lista.map((u) => {
-            const opcoes = opcoesDePapel(eu?.papel, u.papel)
             const souEu = u.id === eu?.id
-            const podeAgir = podeAgirSobre(eu?.papel, u) && !souEu
+            const admin = ehAdmin(eu?.nivelAcesso)
+            const podeEditar = admin || (!!eu?.celulaId && u.celulaId === eu?.celulaId)
+            const st = statusDeUsuario(u)
+            const podeStatus = admin && !souEu
             return (
               <div
                 key={u.id}
@@ -308,27 +385,46 @@ function AbaTodos({ eu }) {
                   </p>
                   <p className="truncate text-sm text-text-muted">{u.email}</p>
                 </div>
-                {/* Reprovado não tem nível; os demais mostram o seletor de papel */}
-                {statusDeUsuario(u) !== 'REPROVADO' && (
+                {/* ícone de nível (admin/super) com hover, antes da qualificação */}
+                {ehAdmin(u.nivelAcesso) && <NivelBadge nivel={u.nivelAcesso} soIcone />}
+                {/* Reprovado não tem qualificação exibida */}
+                {st !== 'REPROVADO' && (
                   <div className="shrink-0">
-                    <RoleSelect
-                      value={u.papel}
-                      opcoes={opcoes}
-                      readOnly={souEu || opcoes.length <= 1 || ocupado === u.id}
-                      onChange={(p) => trocarPapel(u, p)}
+                    <QualificacaoSelect
+                      value={u.qualificacao}
+                      opcoes={podeEditar && opcoesQualif.length ? opcoesQualif : [u.qualificacao]}
+                      readOnly={souEu || !podeEditar || opcoesQualif.length <= 1 || ocupado === u.id}
+                      onChange={(q) => trocarQualificacao(u, q)}
                     />
                   </div>
                 )}
-                {/* Status É o controle: 1 ícone que expande no hover e age no clique */}
-                {podeAgir ? (
-                  <StatusControl status={statusDeUsuario(u)} ocupado={ocupado === u.id} onClick={() => acaoStatus(u)} />
+                {podeStatus ? (
+                  <StatusControl status={st} ocupado={ocupado === u.id} onClick={() => acaoStatus(u)} />
                 ) : (
-                  <StatusBadge status={statusDeUsuario(u)} />
+                  <StatusBadge status={st} />
+                )}
+                {admin && !souEu && (
+                  <button
+                    type="button"
+                    onClick={() => setEditando(u)}
+                    aria-label={`Editar ${u.nome}`}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted transition-colors hover:text-text cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
                 )}
               </div>
             )
           })}
         </div>
+      )}
+      {editando && (
+        <EditarUsuarioModal
+          u={editando}
+          eu={eu}
+          onFechar={() => setEditando(null)}
+          onSalvo={(nv) => setLista((l) => l.map((x) => (x.id === nv.id ? { ...x, ...nv } : x)))}
+        />
       )}
     </div>
   )

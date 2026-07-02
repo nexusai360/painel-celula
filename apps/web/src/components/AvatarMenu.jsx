@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { User, LogOut, Sun, Moon, Monitor, ChevronRight } from 'lucide-react'
 import { Avatar } from './ui/Avatar.jsx'
-import { RoleBadge } from './ui/RoleBadge.jsx'
+import { NivelBadge, QualificacaoBadge } from './ui/RoleBadge.jsx'
+import { ehAdmin } from '../lib/papeis.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useTheme } from '../context/ThemeContext.jsx'
 
@@ -64,8 +65,11 @@ export function AvatarMenu() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-text">{usuario?.nome}</p>
               <p className="truncate text-xs text-text-muted">{usuario?.email}</p>
-              {usuario?.papel && (
-                <div className="mt-1.5"><RoleBadge papel={usuario.papel} /></div>
+              {usuario?.qualificacao && (
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  {ehAdmin(usuario?.nivelAcesso) && <NivelBadge nivel={usuario.nivelAcesso} soIcone />}
+                  <QualificacaoBadge qualificacao={usuario.qualificacao} />
+                </div>
               )}
             </div>
           </div>

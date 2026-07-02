@@ -130,8 +130,8 @@ export async function apiUsuariosPendentes() {
   return data.usuarios
 }
 
-export async function apiAprovarUsuario(id) {
-  const { data } = await api.post(`/usuarios/${id}/aprovar`)
+export async function apiAprovarUsuario(id, qualificacao = 'MEMBRO') {
+  const { data } = await api.post(`/usuarios/${id}/aprovar`, { qualificacao })
   return data.usuario
 }
 
@@ -139,8 +139,18 @@ export async function apiRecusarUsuario(id) {
   await api.post(`/usuarios/${id}/recusar`)
 }
 
-export async function apiAtualizarPapel(id, papel) {
-  const { data } = await api.patch(`/usuarios/${id}/papel`, { papel })
+export async function apiAtualizarNivel(id, nivelAcesso) {
+  const { data } = await api.patch(`/usuarios/${id}/nivel`, { nivelAcesso })
+  return data.usuario
+}
+
+export async function apiAtualizarQualificacao(id, qualificacao) {
+  const { data } = await api.patch(`/usuarios/${id}/qualificacao`, { qualificacao })
+  return data.usuario
+}
+
+export async function apiAtualizarUsuario(id, dados) {
+  const { data } = await api.put(`/usuarios/${id}`, dados)
   return data.usuario
 }
 

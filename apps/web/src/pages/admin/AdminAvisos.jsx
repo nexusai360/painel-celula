@@ -18,7 +18,7 @@ function EnviarNotificacao() {
   const [enviando, setEnviando] = useState(false)
 
   const opcoes = []
-  if (ehAdmin(usuario?.papel)) opcoes.push({ v: 'GLOBAL', label: 'Todos (aviso global)' })
+  if (ehAdmin(usuario?.nivelAcesso)) opcoes.push({ v: 'GLOBAL', label: 'Todos (aviso global)' })
   if (usuario?.celulaId) opcoes.push({ v: 'CELULA', label: 'Minha célula' })
 
   async function enviar(e) {
