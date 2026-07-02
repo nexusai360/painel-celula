@@ -1,8 +1,10 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CalendarDays, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+const MESES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
 const DIAS_SEMANA = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom']
 const pad = (n) => String(n).padStart(2, '0')
 
@@ -62,9 +64,14 @@ export function DateTimePicker({ value, onChange, label, id, placeholder, requir
   const autoId = useId()
   const campoId = id || autoId
   const raiz = useRef(null)
+  const campoRef = useRef(null)
+  const painelRef = useRef(null)
   const [aberto, setAberto] = useState(false)
   const [texto, setTexto] = useState(() => formatarTexto(value, ehData))
   const [focado, setFocado] = useState(false)
+  const [pos, setPos] = useState(null)
+  // Jornada de navegação: 'dias' | 'meses' | 'anos'.
+  const [vista, setVista] = useState('dias')
 
   const parsed = parse(value)
   const hoje = new Date()
@@ -78,18 +85,41 @@ export function DateTimePicker({ value, onChange, label, id, placeholder, requir
   const [mesVisivel, setMesVisivel] = useState(() => (parsed ? { y: parsed.y, m: parsed.m } : { y: hoje.getFullYear(), m: hoje.getMonth() }))
   const [rascunho, setRascunho] = useState(() => parsed)
 
-  useEffect(() => {
-    if (aberto) {
-      const p = parse(value)
-      setRascunho(p)
-      setMesVisivel(p ? { y: p.y, m: p.m } : { y: hoje.getFullYear(), m: hoje.getMonth() })
+  function abrir() {
+    const p = parse(value)
+    setRascunho(p)
+    setMesVisivel(p ? { y: p.y, m: p.m } : { y: hoje.getFullYear(), m: hoje.getMonth() })
+    // Aniversário sem data: começa pelo ANO (evita rolar setas por décadas).
+    setVista(ehData && !p ? 'anos' : 'dias')
+    setAberto(true)
+  }
+
+  // Posiciona o painel em portal (fixed), ancorado ao campo — nunca é cortado.
+  useLayoutEffect(() => {
+    if (!aberto || !campoRef.current) return
+    const el = campoRef.current
+    function place() {
+      const r = el.getBoundingClientRect()
+      const largura = 320
+      const left = Math.min(r.left, window.innerWidth - largura - 8)
+      setPos({ top: r.bottom + 8, left: Math.max(8, left) })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
   }, [aberto])
 
   useEffect(() => {
     if (!aberto) return
-    function onDoc(e) { if (raiz.current && !raiz.current.contains(e.target)) setAberto(false) }
+    function onDoc(e) {
+      if (raiz.current?.contains(e.target)) return
+      if (painelRef.current?.contains(e.target)) return
+      setAberto(false)
+    }
     function onEsc(e) { if (e.key === 'Escape') setAberto(false) }
     document.addEventListener('mousedown', onDoc)
     document.addEventListener('keydown', onEsc)
@@ -107,6 +137,15 @@ export function DateTimePicker({ value, onChange, label, id, placeholder, requir
     return celulas
   }, [mesVisivel])
 
+  // Anos: do ano atual até 1920 (decrescente) — bom para aniversários antigos.
+  const anos = useMemo(() => {
+    const atual = hoje.getFullYear()
+    const arr = []
+    for (let y = atual; y >= 1920; y--) arr.push(y)
+    return arr
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function digitar(bruto) {
     const mascarado = mascarar(bruto, ehData)
     setTexto(mascarado)
@@ -116,7 +155,6 @@ export function DateTimePicker({ value, onChange, label, id, placeholder, requir
   }
   function aoSair() {
     setFocado(false)
-    // texto incompleto/inválido volta ao último value válido
     setTexto(formatarTexto(value, ehData))
   }
 
@@ -125,6 +163,17 @@ export function DateTimePicker({ value, onChange, label, id, placeholder, requir
       const nd = new Date(y, m + delta, 1)
       return { y: nd.getFullYear(), m: nd.getMonth() }
     })
+  }
+  function mudarAno(delta) {
+    setMesVisivel(({ y, m }) => ({ y: y + delta, m }))
+  }
+  function escolherAno(y) {
+    setMesVisivel((mv) => ({ y, m: mv.m }))
+    setVista('meses')
+  }
+  function escolherMes(m) {
+    setMesVisivel((mv) => ({ y: mv.y, m }))
+    setVista('dias')
   }
   function escolherDia(day) {
     const novo = { y: mesVisivel.y, m: mesVisivel.m, day, h: rascunho?.h ?? (ehData ? 0 : 19), min: rascunho?.min ?? 0 }
@@ -148,7 +197,7 @@ export function DateTimePicker({ value, onChange, label, id, placeholder, requir
   return (
     <div className={`relative ${className}`} ref={raiz}>
       {label && <label htmlFor={campoId} className="mb-1.5 block text-sm font-medium text-text">{label}</label>}
-      <div className="relative">
+      <div className="relative" ref={campoRef}>
         <input
           id={campoId}
           value={texto}
@@ -156,7 +205,8 @@ export function DateTimePicker({ value, onChange, label, id, placeholder, requir
           autoComplete="off"
           placeholder={ph}
           aria-label={label}
-          onFocus={() => setFocado(true)}
+          onFocus={() => { setFocado(true); if (!aberto) abrir() }}
+          onClick={() => { if (!aberto) abrir() }}
           onBlur={aoSair}
           onChange={(e) => digitar(e.target.value)}
           className="h-12 w-full rounded-xl border border-border bg-background pl-4 pr-12 text-sm text-text placeholder:text-text-muted transition-colors hover:border-brand-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-1 focus-visible:ring-offset-background"
@@ -166,7 +216,7 @@ export function DateTimePicker({ value, onChange, label, id, placeholder, requir
           aria-haspopup="dialog"
           aria-expanded={aberto}
           aria-label="Abrir calendário"
-          onClick={() => setAberto((v) => !v)}
+          onClick={() => (aberto ? setAberto(false) : abrir())}
           className="absolute right-1.5 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface hover:text-text cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           <CalendarDays className="h-4 w-4" aria-hidden="true" />
@@ -177,62 +227,128 @@ export function DateTimePicker({ value, onChange, label, id, placeholder, requir
         <input tabIndex={-1} aria-hidden="true" className="sr-only" required value={value || ''} onChange={() => {}} />
       )}
 
-      <AnimatePresence>
-        {aberto && (
+      {aberto && pos && createPortal(
+        <AnimatePresence>
           <motion.div
-            role="dialog" aria-label="Selecionar data e hora"
+            ref={painelRef}
+            role="dialog" aria-label="Selecionar data"
             initial={{ opacity: 0, y: -4, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="absolute z-30 mt-2 w-[320px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card p-4 shadow-lg"
+            style={{ position: 'fixed', top: pos.top, left: pos.left, width: 320 }}
+            className="z-[200] max-w-[calc(100vw-1rem)] rounded-2xl border border-border bg-card p-4 shadow-lg"
           >
-            {/* Cabeçalho: mês/ano + navegação */}
-            <div className="mb-3 flex items-center justify-between">
-              <button type="button" onClick={() => mudarMes(-1)} aria-label="Mês anterior"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-surface hover:text-text cursor-pointer">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="text-sm font-semibold text-text">
-                {MESES[mesVisivel.m]} {mesVisivel.y}
-              </span>
-              <button type="button" onClick={() => mudarMes(1)} aria-label="Próximo mês"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-surface hover:text-text cursor-pointer">
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+            {/* ── Cabeçalho por vista ── */}
+            {vista === 'dias' && (
+              <div className="mb-3 flex items-center justify-between">
+                <button type="button" onClick={() => mudarMes(-1)} aria-label="Mês anterior"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-surface hover:text-text cursor-pointer">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => setVista('meses')}
+                  className="rounded-lg px-2 py-1 text-sm font-semibold text-text hover:bg-surface cursor-pointer">
+                  {MESES[mesVisivel.m]} {mesVisivel.y}
+                </button>
+                <button type="button" onClick={() => mudarMes(1)} aria-label="Próximo mês"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-surface hover:text-text cursor-pointer">
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            {vista === 'meses' && (
+              <div className="mb-3 flex items-center justify-between">
+                <button type="button" onClick={() => mudarAno(-1)} aria-label="Ano anterior"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-surface hover:text-text cursor-pointer">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => setVista('anos')}
+                  className="rounded-lg px-2 py-1 text-sm font-semibold text-text hover:bg-surface cursor-pointer">
+                  {mesVisivel.y}
+                </button>
+                <button type="button" onClick={() => mudarAno(1)} aria-label="Próximo ano"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-surface hover:text-text cursor-pointer">
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            {vista === 'anos' && (
+              <div className="mb-3 flex items-center justify-center">
+                <span className="text-sm font-semibold text-text">Selecione o ano</span>
+              </div>
+            )}
 
-            {/* Dias da semana */}
-            <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-text-muted">
-              {DIAS_SEMANA.map((d) => <div key={d} className="py-1">{d}</div>)}
-            </div>
+            {/* ── Corpo por vista ── */}
+            {vista === 'dias' && (
+              <>
+                <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-text-muted">
+                  {DIAS_SEMANA.map((d) => <div key={d} className="py-1">{d}</div>)}
+                </div>
+                <div className="mt-1 grid grid-cols-7 gap-1">
+                  {grade.map((day, i) => {
+                    if (!day) return <div key={`e${i}`} />
+                    const desteDia = `${mesVisivel.y}-${pad(mesVisivel.m + 1)}-${pad(day)}`
+                    const selecionado = rascunho?.day === day && rascunho?.m === mesVisivel.m && rascunho?.y === mesVisivel.y
+                    const ehHoje = desteDia === hojeStr
+                    return (
+                      <button
+                        key={day} type="button" onClick={() => escolherDia(day)}
+                        className={`inline-flex h-9 w-full items-center justify-center rounded-lg text-sm transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                          selecionado
+                            ? 'brand-grad bg-brand font-semibold text-on-brand'
+                            : ehHoje
+                              ? 'font-semibold text-brand ring-1 ring-inset ring-brand-soft/50 hover:bg-surface'
+                              : 'text-text hover:bg-surface'
+                        }`}
+                      >
+                        {day}
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
 
-            {/* Grade de dias */}
-            <div className="mt-1 grid grid-cols-7 gap-1">
-              {grade.map((day, i) => {
-                if (!day) return <div key={`e${i}`} />
-                const desteDia = `${mesVisivel.y}-${pad(mesVisivel.m + 1)}-${pad(day)}`
-                const selecionado = rascunho?.day === day && rascunho?.m === mesVisivel.m && rascunho?.y === mesVisivel.y
-                const ehHoje = desteDia === hojeStr
-                return (
-                  <button
-                    key={day} type="button" onClick={() => escolherDia(day)}
-                    className={`inline-flex h-9 w-full items-center justify-center rounded-lg text-sm transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                      selecionado
-                        ? 'brand-grad bg-brand font-semibold text-on-brand'
-                        : ehHoje
-                          ? 'font-semibold text-brand ring-1 ring-inset ring-brand-soft/50 hover:bg-surface'
-                          : 'text-text hover:bg-surface'
-                    }`}
-                  >
-                    {day}
-                  </button>
-                )
-              })}
-            </div>
+            {vista === 'meses' && (
+              <div className="grid grid-cols-3 gap-2">
+                {MESES_CURTO.map((rotulo, m) => {
+                  const selecionado = m === mesVisivel.m
+                  return (
+                    <button
+                      key={rotulo} type="button" onClick={() => escolherMes(m)}
+                      className={`h-11 rounded-lg text-sm capitalize transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                        selecionado ? 'brand-grad bg-brand font-semibold text-on-brand' : 'text-text hover:bg-surface'
+                      }`}
+                    >
+                      {rotulo}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
 
-            {/* Hora — só no modo datetime */}
-            {!ehData && (
+            {vista === 'anos' && (
+              <div className="max-h-[220px] overflow-y-auto pr-1">
+                <div className="grid grid-cols-4 gap-2">
+                  {anos.map((y) => {
+                    const selecionado = y === mesVisivel.y
+                    return (
+                      <button
+                        key={y} type="button" onClick={() => escolherAno(y)}
+                        className={`h-10 rounded-lg text-sm tabular-nums transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                          selecionado ? 'brand-grad bg-brand font-semibold text-on-brand' : 'text-text hover:bg-surface'
+                        }`}
+                      >
+                        {y}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Hora — só no modo datetime e na vista de dias */}
+            {!ehData && vista === 'dias' && (
               <>
                 <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
                   <Clock className="h-4 w-4 text-text-muted" aria-hidden="true" />
@@ -256,8 +372,9 @@ export function DateTimePicker({ value, onChange, label, id, placeholder, requir
               </>
             )}
           </motion.div>
-        )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   )
 }

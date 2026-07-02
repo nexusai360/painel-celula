@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form'
 import { LogOut, CheckCircle2, User } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiAtualizarPerfil } from '../lib/api.js'
-import { formatarWhatsapp } from '../lib/whatsapp.js'
+import { formatarWhatsapp, whatsappValido } from '../lib/whatsapp.js'
+import { mascaraTelefone } from '../lib/mascaras.js'
 import { mapearErroCampos } from '../lib/erros.js'
 import { ehAdmin } from '../lib/papeis.js'
 import { ehCasadoInicial, mapBackEstadoCivil } from '../lib/estadoCivil.js'
@@ -108,7 +109,19 @@ export default function Perfil() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Input id="nome" label="Nome" autoComplete="name" error={errors.nome?.message} {...register('nome', { required: 'Nome é obrigatório' })} />
-              <Input id="whatsapp" label="WhatsApp" type="tel" placeholder="(62) 99999-9999" autoComplete="tel" inputMode="tel" error={errors.whatsapp?.message} {...register('whatsapp')} />
+              {(() => {
+                const wpp = register('whatsapp', {
+                  validate: (v) => whatsappValido(v) || 'Número inválido — use DDD + número (10 ou 11 dígitos).',
+                })
+                return (
+                  <Input
+                    id="whatsapp" label="WhatsApp" type="tel" placeholder="(62) 99999-9999"
+                    autoComplete="tel" inputMode="tel" error={errors.whatsapp?.message}
+                    {...wpp}
+                    onChange={(e) => { e.target.value = mascaraTelefone(e.target.value); wpp.onChange(e) }}
+                  />
+                )
+              })()}
               <div>
                 <DateTimePicker id="dataNascimento" label="Data de aniversário" mode="date" value={dataNascimento} onChange={setDataNascimento} />
                 <p className="mt-1.5 text-xs text-text-muted">Para te dar os parabéns e orar pela sua vida.</p>
