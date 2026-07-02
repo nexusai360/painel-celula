@@ -1,32 +1,21 @@
 import { Fragment, useState } from 'react'
-import { NavLink, Link } from 'react-router-dom'
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { CalendarDays, Home, Users2, HandHeart, Sparkles, Heart, Menu, UserCheck } from 'lucide-react'
 import { Logo } from './ui/Logo.jsx'
 import { AvatarMenu } from './AvatarMenu.jsx'
 import { NotificacoesSino } from './NotificacoesSino.jsx'
 import { NavDrawer } from './NavDrawer.jsx'
+import { ContextSwitcher } from './ui/ContextSwitcher.jsx'
 import { ehAdmin } from '../lib/papeis.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
-// Fonte única dos itens de navegação por papel (consumida pela TopBar e pelo NavDrawer).
+// Links da área de PARTICIPANTE (membro/líder). A área de Administração tem sua
+// própria sub-nav (rail) no AdminLayout, então em contexto admin o TopBar mostra
+// só o ContextSwitcher.
 export function linksPorPapel(usuario) {
   const { papel, celulaId } = usuario || {}
-  // Usuário pendente (não aprovado) não vê navegação — só perfil/aguardando.
   if (usuario?.aprovado === false) return []
-  if (ehAdmin(papel)) {
-    // Área de Administração.
-    const admin = [
-      { to: '/app/celulas', label: 'Células', icon: Users2, grupo: 'Administração' },
-      { to: '/app/usuarios', label: 'Usuários', icon: UserCheck, grupo: 'Administração' }
-    ]
-    // Admin que também participa de uma célula vê a própria área de participante.
-    if (celulaId) {
-      admin.push({ to: '/app', label: 'Início', icon: Home, end: true, grupo: 'Minha célula', divisor: true })
-      admin.push({ to: '/app/calendario', label: 'Calendário', icon: CalendarDays, grupo: 'Minha célula' })
-      admin.push({ to: '/app/pedidos', label: 'Pedidos', icon: HandHeart, grupo: 'Minha célula' })
-    }
-    return admin
-  }
+  if (usuario?.ativo === false) return [] // conta inativa não navega
   if (!celulaId) return []
   const links = [
     { to: '/app', label: 'Início', icon: Home, end: true },
@@ -44,54 +33,74 @@ export function linksPorPapel(usuario) {
 
 export function TopBar() {
   const { usuario } = useAuth()
-  const links = linksPorPapel(usuario)
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
   const [drawerAberto, setDrawerAberto] = useState(false)
+
+  const podeAdmin = ehAdmin(usuario?.papel)
+  const contexto = pathname.startsWith('/app/admin') ? 'admin' : 'membro'
+  // No contexto admin o rail cuida da navegação; no membro, os links de participante.
+  const links = contexto === 'admin' ? [] : linksPorPapel(usuario)
+
+  function trocarContexto(id) {
+    if (id === 'admin') navigate('/app/admin/usuarios')
+    else navigate('/app')
+  }
 
   return (
     <>
-    <header className="sticky top-0 z-20 border-b border-border bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-      <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 py-2.5">
-        <div className="flex items-center gap-1.5">
-          {links.length > 0 && (
-            <button
-              type="button" aria-label="Abrir menu" onClick={() => setDrawerAberto(true)}
-              className="-ml-1 rounded-lg p-2 text-text-muted hover:bg-surface hover:text-text md:hidden"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-          )}
-          <Link to="/app" aria-label="Ir para o início" className="rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
-            <Logo />
-          </Link>
-        </div>
+      <header className="sticky top-0 z-20 border-b border-border bg-card/90 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-5 py-2.5">
+          <div className="flex items-center gap-2">
+            {links.length > 0 && (
+              <button
+                type="button" aria-label="Abrir menu" onClick={() => setDrawerAberto(true)}
+                className="-ml-1 rounded-lg p-2 text-text-muted hover:bg-surface hover:text-text md:hidden"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            )}
+            <Link to="/app" aria-label="Ir para o início" className="rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+              <Logo />
+            </Link>
+            {podeAdmin && (
+              <div className="ml-1">
+                <ContextSwitcher
+                  contexto={contexto}
+                  onChange={trocarContexto}
+                  podeAdmin={podeAdmin}
+                  temCelula={!!usuario?.celulaId}
+                />
+              </div>
+            )}
+          </div>
 
-        <div className="flex items-center gap-1">
-          {links.length > 0 && (
-            <nav className="mr-2 hidden items-center gap-1 md:flex" aria-label="Navegação principal">
-              {links.map(({ to, label, icon: Icon, end, divisor }) => (
-                <Fragment key={to}>
-                  {divisor && <span className="mx-1.5 h-5 w-px bg-border" aria-hidden="true" />}
-                  <NavLink
-                    to={to} end={end}
-                    className={({ isActive }) =>
-                      `inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-                        isActive ? 'bg-brand text-on-brand' : 'text-text-muted hover:bg-surface hover:text-text'
-                      }`
-                    }
-                  >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                    {label}
-                  </NavLink>
-                </Fragment>
-              ))}
-            </nav>
-          )}
-          <NotificacoesSino />
-          <AvatarMenu />
+          <div className="flex items-center gap-1">
+            {links.length > 0 && (
+              <nav className="mr-2 hidden items-center gap-1 md:flex" aria-label="Navegação principal">
+                {links.map(({ to, label, icon: Icon, end }) => (
+                  <Fragment key={to}>
+                    <NavLink
+                      to={to} end={end}
+                      className={({ isActive }) =>
+                        `inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                          isActive ? 'bg-brand text-on-brand' : 'text-text-muted hover:bg-surface hover:text-text'
+                        }`
+                      }
+                    >
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                      {label}
+                    </NavLink>
+                  </Fragment>
+                ))}
+              </nav>
+            )}
+            <NotificacoesSino />
+            <AvatarMenu />
+          </div>
         </div>
-      </div>
-    </header>
-    <NavDrawer open={drawerAberto} onClose={() => setDrawerAberto(false)} links={links} />
+      </header>
+      <NavDrawer open={drawerAberto} onClose={() => setDrawerAberto(false)} links={links} />
     </>
   )
 }
